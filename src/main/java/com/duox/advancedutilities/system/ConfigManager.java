@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -19,18 +20,23 @@ import java.util.List;
 public class ConfigManager {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    // Sử dụng FMLPaths chuẩn Forge như file cũ của bạn để tương thích tốt hơn
     private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("advancedutilities.json");
 
     public static void load() {
+        System.out.println("[AdvancedUtilities] Loading config from " + CONFIG_PATH); // Debug log
+
         if (!Files.exists(CONFIG_PATH)) {
-            save(); // Tạo file mặc định
+            System.out.println("[AdvancedUtilities] Config file not found, creating default.");
+            save();
             return;
         }
 
         try (Reader reader = new FileReader(CONFIG_PATH.toFile())) {
             JsonObject json = GSON.fromJson(reader, JsonObject.class);
             if (json == null) return;
+
+            // Debug: Kiểm tra xem có bao nhiêu module đang được load
+            System.out.println("[AdvancedUtilities] Modules registered: " + ModuleManager.INSTANCE.getModules().size());
 
             for (Module module : ModuleManager.INSTANCE.getModules()) {
                 if (json.has(module.getName())) {
@@ -47,6 +53,11 @@ public class ConfigManager {
                     }
                 }
             }
+            System.out.println("[AdvancedUtilities] Config loaded successfully.");
+        } catch (JsonSyntaxException e) {
+            System.err.println("[AdvancedUtilities] Config JSON is malformed! Resetting to prevent crash.");
+            e.printStackTrace();
+            // Tùy chọn: Backup file cũ trước khi save đè lên
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -58,10 +69,8 @@ public class ConfigManager {
         for (Module module : ModuleManager.INSTANCE.getModules()) {
             JsonObject moduleJson = new JsonObject();
 
-            // 1. Save Enabled State
             moduleJson.addProperty("enabled", module.isEnabled());
 
-            // 2. Save Settings
             JsonObject settingsJson = new JsonObject();
             for (Setting<?> setting : module.getSettings()) {
                 saveSetting(settingsJson, setting);
@@ -72,7 +81,6 @@ public class ConfigManager {
         }
 
         try {
-            // Tạo thư mục config nếu chưa có
             if (!Files.exists(FMLPaths.CONFIGDIR.get())) {
                 Files.createDirectories(FMLPaths.CONFIGDIR.get());
             }
@@ -95,7 +103,6 @@ public class ConfigManager {
         } else if (setting instanceof BlockListSetting s) {
             List<String> ids = new ArrayList<>();
             for (Block block : s.getValue()) {
-                // Lưu ID dạng string (minecraft:dirt) để không bị lỗi khi block ID số thay đổi
                 ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
                 if (key != null) ids.add(key.toString());
             }
@@ -117,13 +124,19 @@ public class ConfigManager {
                     s.setValueByName(element.getAsString());
                 } else if (setting instanceof BlockListSetting s) {
                     List<Block> blocks = new ArrayList<>();
-                    for (JsonElement idElement : element.getAsJsonArray()) {
-                        ResourceLocation rl = new ResourceLocation(idElement.getAsString());
-                        if (ForgeRegistries.BLOCKS.containsKey(rl)) {
-                            blocks.add(ForgeRegistries.BLOCKS.getValue(rl));
+                    if (element.isJsonArray()) {
+                        for (JsonElement idElement : element.getAsJsonArray()) {
+                            try {
+                                ResourceLocation rl = new ResourceLocation(idElement.getAsString());
+                                if (ForgeRegistries.BLOCKS.containsKey(rl)) {
+                                    blocks.add(ForgeRegistries.BLOCKS.getValue(rl));
+                                }
+                            } catch (Exception ex) {
+                                System.err.println("Invalid block ID in config: " + idElement.getAsString());
+                            }
                         }
+                        s.setValue(blocks);
                     }
-                    s.setValue(blocks);
                 }
             } catch (Exception e) {
                 System.err.println("Error loading setting " + setting.getName() + ": " + e.getMessage());

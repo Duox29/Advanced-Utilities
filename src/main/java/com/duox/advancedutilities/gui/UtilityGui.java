@@ -26,18 +26,19 @@ import java.util.stream.Collectors;
 public class UtilityGui extends Screen {
 
     // --- Layout Constants ---
-    private static final int TAB_HEIGHT = 25;
-    private static final int PANEL_WIDTH = 200; // Fixed width for settings panel
+    private static final int TOP_BAR_HEIGHT = 30; // Chiều cao thanh Category trên cùng
+    private static final int SIDEBAR_WIDTH = 120; // Chiều rộng cột danh sách Module (nhỏ)
+    private static final int MODULE_BTN_HEIGHT = 22;
+    private static final int MODULE_BTN_WIDTH = 100;
     private static final int PADDING = 5;
 
     // --- State ---
     private int currentTabIndex = 0; // 0 = ACTIVE, 1+ = Categories
     private final List<Category> categories = new ArrayList<>();
     private List<Module> activeModulesSnapshot;
-    private Module selectedModule = null; // The module currently being edited
+    private Module selectedModule = null;
 
     // --- Widget Management ---
-    // We keep track of "dynamic" widgets (settings sliders/buttons) so we can remove them when switching modules
     private final List<AbstractWidget> dynamicWidgets = new ArrayList<>();
     private final List<SettingWidgetWrapper> customRenderWidgets = new ArrayList<>();
 
@@ -48,45 +49,40 @@ public class UtilityGui extends Screen {
     @Override
     protected void init() {
         super.init();
-
-        // 1. Initialize Categories
         categories.clear();
         Collections.addAll(categories, Category.values());
 
-        // 2. Snapshot active modules
+        // Snapshot active modules
         activeModulesSnapshot = ModuleManager.INSTANCE.getModules().stream()
                 .filter(Module::isEnabled)
                 .collect(Collectors.toList());
 
-        // 3. If a module was selected before resize/init, attempt to restore its settings panel
+        // Restore settings panel if a module was selected
         if (selectedModule != null) {
             initSettingsPanel(selectedModule);
         }
     }
 
     /**
-     * Initializes the settings panel on the right side for the specific module.
-     * Clears old widgets and creates new ones using the Factory pattern.
+     * Khởi tạo panel Settings bên phải cho Module được chọn.
      */
     private void initSettingsPanel(Module module) {
-        // Clear previous dynamic widgets from the Screen's render list
-        for (AbstractWidget w : dynamicWidgets) {
-            this.removeWidget(w);
-        }
+        // Xóa widget cũ
+        for (AbstractWidget w : dynamicWidgets) this.removeWidget(w);
         dynamicWidgets.clear();
         customRenderWidgets.clear();
 
         this.selectedModule = module;
         if (module == null) return;
 
-        int startX = this.width - PANEL_WIDTH + 10;
-        int startY = 40;
-        int widgetWidth = PANEL_WIDTH - 20;
+        // Vị trí bắt đầu của Settings (Bên phải Sidebar)
+        int startX = SIDEBAR_WIDTH + 20;
+        int startY = TOP_BAR_HEIGHT + 40; // Dưới tiêu đề Module một chút
+        int widgetWidth = 200; // Độ rộng chuẩn cho slider/button settings
 
         for (Setting<?> setting : module.getSettings()) {
             SettingWidgetWrapper widget = null;
 
-            // Factory Logic
             if (setting instanceof BooleanSetting s) {
                 widget = new BooleanWidget(s, startX, startY, widgetWidth, 20);
             } else if (setting instanceof NumberSetting s) {
@@ -98,15 +94,11 @@ public class UtilityGui extends Screen {
             }
 
             if (widget != null) {
-                // Register standard MC widgets (Buttons, Sliders)
                 widget.init(w -> {
                     this.addRenderableWidget(w);
                     this.dynamicWidgets.add(w);
-                }, () -> { /* onRefresh callback if needed */ });
-
-                // Register wrapper for custom rendering/clicking
+                }, () -> {});
                 this.customRenderWidgets.add(widget);
-
                 startY += widget.getHeight() + PADDING;
             }
         }
@@ -116,164 +108,167 @@ public class UtilityGui extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(guiGraphics);
 
-        // --- Layout Calculation ---
-        int mainAreaWidth = this.width - PANEL_WIDTH;
-        int startX = 20;
-        int startY = 25;
+        // ============================
+        // 1. BACKGROUNDS & DIVIDERS
+        // ============================
 
-        // --- 1. Draw Title ---
-        guiGraphics.drawString(this.font, "Advanced Utilities", 20, 10, 0xFFFFFF, false);
+        // Sidebar Background (Trái - Đen mờ đậm hơn)
+        guiGraphics.fill(0, TOP_BAR_HEIGHT, SIDEBAR_WIDTH, this.height, 0xAA000000);
+        // Settings Background (Phải - Đen mờ nhạt hơn)
+        guiGraphics.fill(SIDEBAR_WIDTH, TOP_BAR_HEIGHT, this.width, this.height, 0x80000000);
 
-        // --- 2. Draw Settings Panel Background (Right Side) ---
-        // Darker background for the panel
-        guiGraphics.fill(mainAreaWidth, 0, this.width, this.height, 0x80000000);
-        guiGraphics.vLine(mainAreaWidth, 0, this.height, 0xFFFFFFFF); // Separator line
+        // Đường kẻ dọc phân chia
+        guiGraphics.vLine(SIDEBAR_WIDTH, TOP_BAR_HEIGHT, this.height, 0xFFFFFFFF);
+        // Đường kẻ ngang phân chia Top Bar
+        guiGraphics.hLine(0, this.width, TOP_BAR_HEIGHT, 0xFFFFFFFF);
 
-        if (selectedModule != null) {
-            guiGraphics.drawCenteredString(this.font, selectedModule.getName() + " Settings",
-                    mainAreaWidth + (PANEL_WIDTH / 2), 15, 0xFFFFFF);
-        } else {
-            guiGraphics.drawCenteredString(this.font, "Select a Module",
-                    mainAreaWidth + (PANEL_WIDTH / 2), this.height / 2, 0xAAAAAA);
-        }
+        // Title Góc Trái Trên
+        guiGraphics.drawString(this.font, "Adv. Utils", 10, 11, 0xFFFFFF, false);
 
-        // --- 3. Render Tabs (Top Bar) ---
-        int tabX = startX;
+        // ============================
+        // 2. CATEGORY TABS (TOP BAR)
+        // ============================
+        int tabX = 80; // Bắt đầu sau Title
+        int tabY = 2;
+        int tabHeight = 26;
         int tabWidth = 60;
 
-        // Draw Active Tab
-        boolean isActiveTabSelected = (currentTabIndex == 0);
-        drawTabButton(guiGraphics, tabX, startY, tabWidth, TAB_HEIGHT, "ACTIVE", isActiveTabSelected, mouseX, mouseY);
+        // Tab ACTIVE
+        boolean isActiveTab = (currentTabIndex == 0);
+        drawTabButton(guiGraphics, tabX, tabY, tabWidth, tabHeight, "ACTIVE", isActiveTab, mouseX, mouseY);
         tabX += tabWidth + 5;
 
-        // Draw Category Tabs
+        // Tab CATEGORIES
         for (int i = 0; i < categories.size(); i++) {
             boolean isSelected = (currentTabIndex == i + 1);
-            Category cat = categories.get(i);
-            drawTabButton(guiGraphics, tabX, startY, tabWidth, TAB_HEIGHT, cat.name(), isSelected, mouseX, mouseY);
+            drawTabButton(guiGraphics, tabX, tabY, tabWidth, tabHeight, categories.get(i).name(), isSelected, mouseX, mouseY);
             tabX += tabWidth + 5;
         }
 
-        // --- 4. Render Modules Grid ---
+        // ============================
+        // 3. VERTICAL MODULE LIST (SIDEBAR)
+        // ============================
         List<Module> modulesToDisplay;
         if (currentTabIndex == 0) modulesToDisplay = activeModulesSnapshot;
         else modulesToDisplay = ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
 
-        int gridX = startX;
-        int gridY = startY + TAB_HEIGHT + 10;
-        int btnWidth = 100;
-        int btnHeight = 20;
+        int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2; // Canh giữa cột Sidebar
+        int btnY = TOP_BAR_HEIGHT + 10;
 
         if (modulesToDisplay.isEmpty()) {
-            guiGraphics.drawString(this.font, "No modules here...", gridX, gridY, 0xAAAAAA, false);
+            guiGraphics.drawCenteredString(this.font, "Empty", SIDEBAR_WIDTH / 2, btnY, 0xAAAAAA);
         } else {
             for (Module mod : modulesToDisplay) {
-                boolean isHovered = isInside(mouseX, mouseY, gridX, gridY, btnWidth, btnHeight);
+                boolean isHovered = isInside(mouseX, mouseY, btnX, btnY, MODULE_BTN_WIDTH, MODULE_BTN_HEIGHT);
                 boolean isSelected = (mod == selectedModule);
 
-                // Color Logic: Green (Enabled), Red (Disabled), Blue Border (Selected)
+                // Màu: Xanh (Bật) / Đỏ (Tắt)
                 int color = mod.isEnabled() ? new Color(46, 204, 113).getRGB() : new Color(231, 76, 60).getRGB();
                 if (isHovered) color = darken(color);
 
-                guiGraphics.fill(gridX, gridY, gridX + btnWidth, gridY + btnHeight, color);
+                // Vẽ nút Module
+                guiGraphics.fill(btnX, btnY, btnX + MODULE_BTN_WIDTH, btnY + MODULE_BTN_HEIGHT, color);
 
-                // Draw Selection Border
+                // Viền chọn (xanh dương)
                 if (isSelected) {
-                    guiGraphics.renderOutline(gridX - 1, gridY - 1, btnWidth + 2, btnHeight + 2, 0xFF3498DB);
+                    guiGraphics.renderOutline(btnX - 1, btnY - 1, MODULE_BTN_WIDTH + 2, MODULE_BTN_HEIGHT + 2, 0xFF3498DB);
                 }
 
-                guiGraphics.drawCenteredString(this.font, mod.getName(), gridX + btnWidth / 2, gridY + 6, 0xFFFFFF);
+                // Tên Module
+                guiGraphics.drawCenteredString(this.font, mod.getName(), btnX + MODULE_BTN_WIDTH / 2, btnY + 7, 0xFFFFFF);
 
+                // Tooltip
                 if (isHovered) {
                     guiGraphics.renderTooltip(this.font, Component.literal(mod.getDescription()), mouseX, mouseY);
                 }
 
-                // Grid Flow Logic
-                gridX += btnWidth + PADDING;
-                // Wrap if we hit the settings panel
-                if (gridX + btnWidth > mainAreaWidth) {
-                    gridX = startX;
-                    gridY += btnHeight + PADDING;
-                }
+                // Xuống dòng
+                btnY += MODULE_BTN_HEIGHT + PADDING;
             }
         }
 
-        // --- 5. Render Custom Widget Elements (Block Lists, etc.) ---
-        // Standard widgets (buttons/sliders) are rendered by super.render()
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        // ============================
+        // 4. SETTINGS AREA (RIGHT SIDE)
+        // ============================
+        if (selectedModule != null) {
+            // Tiêu đề Settings
+            guiGraphics.drawString(this.font, "Settings: " + selectedModule.getName(), SIDEBAR_WIDTH + 20, TOP_BAR_HEIGHT + 15, 0xFFFF00, false);
 
-        // Custom rendering for things not covered by standard widgets
-        for (SettingWidgetWrapper w : customRenderWidgets) {
-            w.render(guiGraphics, mouseX, mouseY, partialTick);
+            // Vẽ các widget custom (MC Widgets tự vẽ bởi super.render)
+            for (SettingWidgetWrapper w : customRenderWidgets) {
+                w.render(guiGraphics, mouseX, mouseY, partialTick);
+            }
+        } else {
+            guiGraphics.drawCenteredString(this.font, "Select a module to edit settings",
+                    SIDEBAR_WIDTH + (this.width - SIDEBAR_WIDTH) / 2, this.height / 2, 0xAAAAAA);
         }
+
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 1. Handle Settings Panel Interactions first
-        if (selectedModule != null && mouseX > (this.width - PANEL_WIDTH)) {
-            // Pass click to custom widgets (like BlockList delete buttons)
+        // 1. Check click trong vùng Settings (Bên phải)
+        if (mouseX > SIDEBAR_WIDTH) {
+            // Ưu tiên Custom Widgets (như nút Delete trong BlockList)
             for (SettingWidgetWrapper w : customRenderWidgets) {
                 if (w.mouseClicked(mouseX, mouseY, button)) return true;
             }
-            // Pass click to standard widgets (Buttons, Sliders)
+            // Sau đó đến Standard Widgets (Slider/Button)
             if (super.mouseClicked(mouseX, mouseY, button)) return true;
         }
 
-        // 2. Handle Tab Interactions
-        int startX = 20;
-        int startY = 25;
-        int tabWidth = 60;
-
-        if (isInside(mouseX, mouseY, startX, startY, tabWidth, TAB_HEIGHT)) {
-            currentTabIndex = 0;
-            return true;
-        }
-        startX += tabWidth + 5;
-
-        for (int i = 0; i < categories.size(); i++) {
-            if (isInside(mouseX, mouseY, startX, startY, tabWidth, TAB_HEIGHT)) {
-                currentTabIndex = i + 1;
+        // 2. Check click Tabs (Top Bar)
+        if (mouseY < TOP_BAR_HEIGHT) {
+            int tabX = 80;
+            int tabWidth = 60;
+            // Active Tab
+            if (isInside(mouseX, mouseY, tabX, 2, tabWidth, 26)) {
+                currentTabIndex = 0;
                 return true;
             }
-            startX += tabWidth + 5;
-        }
-
-        // 3. Handle Module Interactions
-        // Re-calculate grid positions to find which module was clicked
-        List<Module> modulesToDisplay;
-        if (currentTabIndex == 0) modulesToDisplay = activeModulesSnapshot;
-        else modulesToDisplay = ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
-
-        int mainAreaWidth = this.width - PANEL_WIDTH;
-        int gridX = 20;
-        int gridY = startY + TAB_HEIGHT + 10;
-        int btnWidth = 100;
-        int btnHeight = 20;
-
-        for (Module mod : modulesToDisplay) {
-            if (isInside(mouseX, mouseY, gridX, gridY, btnWidth, btnHeight)) {
-                if (button == 0) { // Left Click -> Toggle
-                    mod.toggle();
-                    ConfigManager.save();
-                } else if (button == 1) { // Right Click -> Select Settings
-                    initSettingsPanel(mod);
+            tabX += tabWidth + 5;
+            // Category Tabs
+            for (int i = 0; i < categories.size(); i++) {
+                if (isInside(mouseX, mouseY, tabX, 2, tabWidth, 26)) {
+                    currentTabIndex = i + 1;
+                    return true;
                 }
-                return true;
+                tabX += tabWidth + 5;
             }
+        }
 
-            gridX += btnWidth + PADDING;
-            if (gridX + btnWidth > mainAreaWidth) {
-                gridX = 20;
-                gridY += btnHeight + PADDING;
+        // 3. Check click Module List (Sidebar)
+        if (mouseX <= SIDEBAR_WIDTH && mouseY > TOP_BAR_HEIGHT) {
+            List<Module> modulesToDisplay;
+            if (currentTabIndex == 0) modulesToDisplay = activeModulesSnapshot;
+            else modulesToDisplay = ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
+
+            int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2;
+            int btnY = TOP_BAR_HEIGHT + 10;
+
+            for (Module mod : modulesToDisplay) {
+                if (isInside(mouseX, mouseY, btnX, btnY, MODULE_BTN_WIDTH, MODULE_BTN_HEIGHT)) {
+                    if (button == 0) { // Chuột trái -> Toggle
+                        mod.toggle();
+                        ConfigManager.save();
+                    } else if (button == 1) { // Chuột phải -> Mở Settings
+                        initSettingsPanel(mod);
+                    }
+                    // Nếu click module đang settings -> Reload panel để update trạng thái nếu cần
+                    if (mod == selectedModule) {
+                        initSettingsPanel(mod);
+                    }
+                    return true;
+                }
+                btnY += MODULE_BTN_HEIGHT + PADDING;
             }
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    // --- Helper Methods ---
-
+    // --- Helpers ---
     private boolean isInside(double mx, double my, int x, int y, int w, int h) {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
@@ -287,18 +282,15 @@ public class UtilityGui extends Screen {
         int color = selected ? new Color(52, 152, 219).getRGB() : new Color(44, 62, 80).getRGB();
         boolean hovered = isInside(mx, my, x, y, w, h);
         if (hovered && !selected) color = new Color(52, 73, 94).getRGB();
-
         guiGraphics.fill(x, y, x + w, y + h, color);
         guiGraphics.drawCenteredString(this.font, text, x + w / 2, y + 8, selected ? 0xFFFF00 : 0xAAAAAA);
     }
 
     @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
+    public boolean isPauseScreen() { return false; }
 
     // =================================================================================
-    // INNER CLASSES FOR SETTINGS WIDGETS
+    // INNER CLASSES (WIDGET WRAPPERS)
     // =================================================================================
 
     private abstract static class SettingWidgetWrapper {
@@ -315,21 +307,17 @@ public class UtilityGui extends Screen {
     private static class BooleanWidget extends SettingWidgetWrapper {
         private final BooleanSetting setting;
         public BooleanWidget(BooleanSetting setting, int x, int y, int width, int height) {
-            super(x, y, width, height);
-            this.setting = setting;
+            super(x, y, width, height); this.setting = setting;
         }
         @Override
         public void init(Consumer<AbstractWidget> widgetConsumer, Runnable onRefresh) {
             Button btn = Button.builder(
-                            Component.literal(setting.getName() + ": " + (setting.getValue() ? "ON" : "OFF")),
-                            button -> {
-                                setting.toggle();
-                                ConfigManager.save();
-                                button.setMessage(Component.literal(setting.getName() + ": " + (setting.getValue() ? "ON" : "OFF")));
-                                button.setFGColor(setting.getValue() ? 0x55FF55 : 0xAAAAAA);
-                            })
-                    .bounds(x, y, width, height)
-                    .build();
+                    Component.literal(setting.getName() + ": " + (setting.getValue() ? "ON" : "OFF")),
+                    button -> {
+                        setting.toggle(); ConfigManager.save();
+                        button.setMessage(Component.literal(setting.getName() + ": " + (setting.getValue() ? "ON" : "OFF")));
+                        button.setFGColor(setting.getValue() ? 0x55FF55 : 0xAAAAAA);
+                    }).bounds(x, y, width, height).build();
             btn.setFGColor(setting.getValue() ? 0x55FF55 : 0xAAAAAA);
             widgetConsumer.accept(btn);
         }
@@ -338,27 +326,15 @@ public class UtilityGui extends Screen {
     private static class NumberWidget extends SettingWidgetWrapper {
         private final NumberSetting setting;
         public NumberWidget(NumberSetting setting, int x, int y, int width, int height) {
-            super(x, y, width, height);
-            this.setting = setting;
+            super(x, y, width, height); this.setting = setting;
         }
         @Override
         public void init(Consumer<AbstractWidget> widgetConsumer, Runnable onRefresh) {
             ForgeSlider slider = new ForgeSlider(
-                    x, y, width, height,
-                    Component.literal(setting.getName() + ": "),
-                    Component.empty(),
-                    setting.getMin(),
-                    setting.getMax(),
-                    setting.getValue(),
-                    setting.getIncrement(),
-                    1,
-                    true
+                    x, y, width, height, Component.literal(setting.getName() + ": "), Component.empty(),
+                    setting.getMin(), setting.getMax(), setting.getValue(), setting.getIncrement(), 1, true
             ) {
-                @Override
-                protected void applyValue() {
-                    setting.setValue(this.getValue());
-                    ConfigManager.save();
-                }
+                @Override protected void applyValue() { setting.setValue(this.getValue()); ConfigManager.save(); }
             };
             widgetConsumer.accept(slider);
         }
@@ -367,20 +343,16 @@ public class UtilityGui extends Screen {
     private static class EnumWidget extends SettingWidgetWrapper {
         private final EnumSetting<?> setting;
         public EnumWidget(EnumSetting<?> setting, int x, int y, int width, int height) {
-            super(x, y, width, height);
-            this.setting = setting;
+            super(x, y, width, height); this.setting = setting;
         }
         @Override
         public void init(Consumer<AbstractWidget> widgetConsumer, Runnable onRefresh) {
             Button btn = Button.builder(
-                            Component.literal(setting.getName() + ": " + setting.getValue().name()),
-                            button -> {
-                                setting.next();
-                                ConfigManager.save();
-                                button.setMessage(Component.literal(setting.getName() + ": " + setting.getValue().name()));
-                            })
-                    .bounds(x, y, width, height)
-                    .build();
+                    Component.literal(setting.getName() + ": " + setting.getValue().name()),
+                    button -> {
+                        setting.next(); ConfigManager.save();
+                        button.setMessage(Component.literal(setting.getName() + ": " + setting.getValue().name()));
+                    }).bounds(x, y, width, height).build();
             widgetConsumer.accept(btn);
         }
     }
@@ -388,22 +360,16 @@ public class UtilityGui extends Screen {
     private static class BlockListWidget extends SettingWidgetWrapper {
         private final BlockListSetting setting;
         public BlockListWidget(BlockListSetting setting, int x, int y, int width, int height) {
-            super(x, y, width, height);
-            this.setting = setting;
+            super(x, y, width, height); this.setting = setting;
         }
-
-        @Override
-        public void init(Consumer<AbstractWidget> widgetConsumer, Runnable onRefresh) {
-            // Custom drawn, no standard widgets
-        }
+        @Override public void init(Consumer<AbstractWidget> widgetConsumer, Runnable onRefresh) {} // Custom draw only
 
         @Override
         public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
             Minecraft mc = Minecraft.getInstance();
-            // Name
             guiGraphics.drawString(mc.font, setting.getName(), x, y + 6, 0xFFFFFF, false);
 
-            // Add Button (Visual)
+            // Add Button
             int btnAddX = x + width - 20;
             boolean isHoverAdd = mouseX >= btnAddX && mouseX <= btnAddX + 20 && mouseY >= y && mouseY <= y + 20;
             guiGraphics.fill(btnAddX, y, btnAddX + 20, y + 20, isHoverAdd ? 0xFF2ECC71 : 0xFF555555);
@@ -413,7 +379,7 @@ public class UtilityGui extends Screen {
             int itemX = x + 80;
             int limitX = btnAddX - 5;
             for (Block b : setting.getValue()) {
-                if (itemX + 16 > limitX) break; // Clip logic
+                if (itemX + 16 > limitX) break;
                 guiGraphics.renderItem(new ItemStack(b), itemX, y + 2);
                 itemX += 18;
             }
@@ -422,22 +388,16 @@ public class UtilityGui extends Screen {
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
             int btnAddX = x + width - 20;
-
-            // Click Add
             if (mouseX >= btnAddX && mouseX <= btnAddX + 20 && mouseY >= y && mouseY <= y + 20) {
                 BlockSelector.INSTANCE.startSelecting(setting);
                 return true;
             }
-
-            // Click Item to Remove
             int itemX = x + 80;
             int limitX = btnAddX - 5;
             for (Block b : new ArrayList<>(setting.getValue())) {
                 if (itemX + 16 > limitX) break;
                 if (mouseX >= itemX && mouseX <= itemX + 16 && mouseY >= y && mouseY <= y + 16) {
-                    setting.remove(b);
-                    ConfigManager.save();
-                    return true;
+                    setting.remove(b); ConfigManager.save(); return true;
                 }
                 itemX += 18;
             }

@@ -2,6 +2,7 @@ package com.duox.advancedutilities;
 
 import com.duox.advancedutilities.gui.UtilityGui;
 import com.duox.advancedutilities.system.BlockSelector; // [MỚI] Import BlockSelector
+import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.Module;      // [MỚI] Import Module
 import com.duox.advancedutilities.system.ModuleManager;
 import net.minecraft.client.KeyMapping;
@@ -40,7 +41,8 @@ public class AdvancedUtilities {
 
     private void clientSetup(final FMLClientSetupEvent event) {
         // ModuleManager loading logic (nếu có)
-        // ModuleManager.INSTANCE.init(); // Uncomment nếu bạn có hàm init trong Manager
+        ModuleManager.INSTANCE.init();
+        ConfigManager.load();
     }
 
     public void registerKeys(RegisterKeyMappingsEvent event) {
