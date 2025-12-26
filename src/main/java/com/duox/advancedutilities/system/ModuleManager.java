@@ -1,5 +1,6 @@
 package com.duox.advancedutilities.system;
 
+import com.duox.advancedutilities.modules.AutoRightClick;
 import com.duox.advancedutilities.modules.FullBright;
 import com.duox.advancedutilities.modules.NoBreakDelay;
 import net.minecraftforge.common.MinecraftForge;
@@ -18,6 +19,7 @@ public class ModuleManager {
         // Đăng ký các module
         register(new FullBright());
         register(new NoBreakDelay());
+        modules.add(new AutoRightClick());
     }
 
     private void register(Module module) {

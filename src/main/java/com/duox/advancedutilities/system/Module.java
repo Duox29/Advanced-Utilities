@@ -1,6 +1,9 @@
 package com.duox.advancedutilities.system;
 
+import com.duox.advancedutilities.system.settings.Setting;
 import net.minecraft.client.Minecraft;
+import java.util.ArrayList;
+import java.util.List;
 
 public abstract class Module {
     protected final Minecraft mc = Minecraft.getInstance();
@@ -8,13 +11,25 @@ public abstract class Module {
     private final String description;
     private final Category category;
     private boolean enabled = false;
-    private int keybind; // Virtual keybind code (GLFW)
+
+    // --- THÊM PHẦN NÀY ---
+    private final List<Setting<?>> settings = new ArrayList<>();
 
     public Module(String name, String description, Category category) {
         this.name = name;
         this.description = description;
         this.category = category;
     }
+
+    // Đăng ký Setting vào Module
+    protected void addSetting(Setting<?> setting) {
+        this.settings.add(setting);
+    }
+
+    public List<Setting<?>> getSettings() {
+        return settings;
+    }
+    // ---------------------
 
     public void toggle() {
         this.enabled = !this.enabled;
@@ -33,8 +48,7 @@ public abstract class Module {
     public String getDescription() { return description; }
     public Category getCategory() { return category; }
 
-    // Các hàm để Override
     public void onEnable() {}
     public void onDisable() {}
-    public void onTick() {} // Chạy mỗi tick game
+    public void onTick() {}
 }

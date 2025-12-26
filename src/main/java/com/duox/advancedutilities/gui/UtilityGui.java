@@ -5,6 +5,7 @@ import com.duox.advancedutilities.system.ConfigUtil;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.ModuleManager;
 import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -173,15 +174,18 @@ public class UtilityGui extends Screen {
 
         for (Module mod : modulesToDisplay) {
             if (isInside(mouseX, mouseY, gridX, gridY, btnWidth, btnHeight)) {
-                // Toggle Module
-                mod.toggle();
-
-                // Lưu Config ngay khi bấm
-                ConfigUtil.saveConfig();
-
-                // Lưu ý: Không xóa khỏi activeModulesSnapshot ở đây
-                // để giữ nút hiển thị cho đến khi thoát GUI.
-                return true;
+                // Left Click (0) -> Toggle
+                if (button == 0) {
+                    mod.toggle();
+                    ConfigUtil.saveConfig();
+                    return true;
+                }
+                // Right Click (1) -> Open Settings
+                else if (button == 1) {
+                    // Mở màn hình Settings, truyền 'this' để làm parent (để nút Back hoạt động)
+                    Minecraft.getInstance().setScreen(new ModuleSettingsScreen(this, mod));
+                    return true;
+                }
             }
 
             gridY += btnHeight + padding;

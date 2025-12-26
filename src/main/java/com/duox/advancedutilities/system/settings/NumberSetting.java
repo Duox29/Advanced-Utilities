@@ -1,0 +1,27 @@
+package com.duox.advancedutilities.system.settings;
+
+public class NumberSetting extends Setting<Double> {
+    private final double min;
+    private final double max;
+    private final double increment;
+
+    public NumberSetting(String name, double defaultValue, double min, double max, double increment) {
+        super(name, defaultValue);
+        this.min = min;
+        this.max = max;
+        this.increment = increment;
+    }
+
+    public double getMin() { return min; }
+    public double getMax() { return max; }
+
+    // Helper để lấy giá trị int cho gọn
+    public int getInt() { return value.intValue(); }
+
+    // Logic làm tròn theo increment
+    @Override
+    public void setValue(Double val) {
+        double precision = 1.0 / increment;
+        super.setValue(Math.round(Math.max(min, Math.min(max, val)) * precision) / precision);
+    }
+}

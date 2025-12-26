@@ -1,55 +1,71 @@
 package com.duox.advancedutilities;
 
 import com.duox.advancedutilities.gui.UtilityGui;
+import com.duox.advancedutilities.system.BlockSelector; // [MỚI] Import BlockSelector
+import com.duox.advancedutilities.system.Module;      // [MỚI] Import Module
 import com.duox.advancedutilities.system.ModuleManager;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;            // [MỚI] Import TickEvent
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
-@Mod("advancedutilities") // ID của Mod (phải trùng với mods.toml)
+@Mod("advancedutilities")
 public class AdvancedUtilities {
 
-    // Keybind mở Menu
     public static final KeyMapping OPEN_GUI_KEY = new KeyMapping(
-            "Open GUI", // Tên key trong file lang (hoặc để raw text)
+            "Open GUI",
             GLFW.GLFW_KEY_RIGHT_SHIFT,
-            "Advanced Utilities" // Category trong Keybind settings
+            "Advanced Utilities"
     );
 
     public AdvancedUtilities() {
-        // Đăng ký Event Bus cho Mod (Setup, Register Keys)
+        // Event Bus cho quá trình khởi chạy Mod (Setup, Register Keys)
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::registerKeys);
 
-        // Đăng ký Event Bus cho Forge (Tick, Input, Game Events)
+        // Event Bus cho các sự kiện trong Game (Tick, Input, Render)
         MinecraftForge.EVENT_BUS.register(this);
+
+        // --- [CRITICAL] Đăng ký BlockSelector ---
+        // Bắt buộc phải có dòng này để tính năng "Add Block" hoạt động
+        BlockSelector.INSTANCE.init();
     }
 
-    // Khởi tạo Client
     private void clientSetup(final FMLClientSetupEvent event) {
-        // Khởi tạo ModuleManager và Config
-        ModuleManager.INSTANCE.init();
+        // ModuleManager loading logic (nếu có)
+        // ModuleManager.INSTANCE.init(); // Uncomment nếu bạn có hàm init trong Manager
     }
 
-    // Đăng ký Keybind vào Game
     public void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(OPEN_GUI_KEY);
     }
 
-    // Lắng nghe phím bấm (Runtime)
     @SubscribeEvent
     public void onKeyInput(InputEvent.Key event) {
-        // Kiểm tra Key bấm và đảm bảo không null
         if (OPEN_GUI_KEY.consumeClick()) {
             Minecraft.getInstance().setScreen(new UtilityGui());
+        }
+    }
+
+    // --- [CRITICAL] Vòng lặp chính của Mod (Heartbeat) ---
+    // Hàm này sẽ chạy 20 lần/giây. Nó chịu trách nhiệm gọi onTick() cho các module.
+    // Nếu thiếu hàm này, AutoRightClick sẽ đứng im.
+    @SubscribeEvent
+    public void onClientTick(TickEvent.ClientTickEvent event) {
+        // Chỉ xử lý ở cuối tick (Phase.END) và khi đã vào game (player != null)
+        if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
+
+            // Duyệt qua tất cả module, nếu đang BẬT thì gọi onTick()
+            ModuleManager.INSTANCE.getModules().stream()
+                    .filter(Module::isEnabled)
+                    .forEach(Module::onTick);
         }
     }
 }
