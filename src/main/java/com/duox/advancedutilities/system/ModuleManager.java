@@ -1,9 +1,6 @@
 package com.duox.advancedutilities.system;
 
-import com.duox.advancedutilities.modules.AutoFish;
-import com.duox.advancedutilities.modules.AutoRightClick;
-import com.duox.advancedutilities.modules.FullBright;
-import com.duox.advancedutilities.modules.NoBreakDelay;
+import com.duox.advancedutilities.modules.*;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -21,6 +18,7 @@ public class ModuleManager {
         register(new NoBreakDelay());
         register(new AutoFish());
         register(new AutoRightClick());
+        register(new AutoReconnect());
     }
 
     private void register(Module module) {

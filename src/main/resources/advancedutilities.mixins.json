@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "advancedutilities.refmap.json",
   "mixins": [
-    "MixinMultiPlayerGameMode"
+    "MixinMultiPlayerGameMode",
+    "MixinConnectScreen",
+    "MixinDisconnectedScreen"
   ],
   "injectors": {
     "defaultRequire": 1
