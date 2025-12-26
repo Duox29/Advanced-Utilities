@@ -15,7 +15,10 @@ public class NumberSetting extends Setting<Double> {
     public double getMin() { return min; }
     public double getMax() { return max; }
 
-    // Helper để lấy giá trị int cho gọn
+    // FIX: Thêm Getter cho increment để GUI có thể sử dụng
+    public double getIncrement() { return increment; }
+
+    // Helper để lấy giá trị int cho gọn (dùng cho tick delay, timeout...)
     public int getInt() { return value.intValue(); }
 
     // Logic làm tròn theo increment
