@@ -3,6 +3,7 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = mod_version
@@ -18,7 +19,6 @@ println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty '
 minecraft {
 
     mappings channel: mapping_channel, version: mapping_version
-
     copyIdeResources = true
 
     runs {
@@ -61,17 +61,28 @@ minecraft {
 
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
-
+mixin {
+    add sourceSets.main, "advancedutilities.refmap.json"
+    config "advancedutilities.mixins.json"
+}
 repositories {
-
-    // flatDir {
-    //     dir 'libs'
-    // }
+    mavenCentral()
+    flatDir {
+        dirs 'libs'
+    }
+    maven {
+        url "https://cursemaven.com"
+    }
 }
 
 dependencies {
 
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:0.4.0"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:0.4.0")) {
+        jarJar.ranged(it, "[0.4.0,)")
+    }
 
 }
 
