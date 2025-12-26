@@ -1,10 +1,9 @@
 package com.duox.advancedutilities.gui;
 
 import com.duox.advancedutilities.system.Category;
-import com.duox.advancedutilities.system.ConfigUtil;
+import com.duox.advancedutilities.system.ConfigManager; // <--- Sử dụng Manager mới
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.ModuleManager;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -12,6 +11,7 @@ import net.minecraft.network.chat.Component;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +21,7 @@ public class UtilityGui extends Screen {
     private final List<Category> categories = new ArrayList<>();
 
     // Snapshot danh sách module đang bật khi mở GUI
+    // Giúp module không biến mất ngay lập tức khi tắt ở tab ACTIVE
     private List<Module> activeModulesSnapshot;
 
     public UtilityGui() {
@@ -31,14 +32,11 @@ public class UtilityGui extends Screen {
     protected void init() {
         super.init();
 
-        // 1. Tạo danh sách Category (ACTIVE là logic riêng, không nằm trong Enum)
+        // 1. Tạo danh sách Category
         categories.clear();
-        for (Category c : Category.values()) {
-            categories.add(c);
-        }
+        Collections.addAll(categories, Category.values());
 
-        // 2. Chụp lại danh sách các module đang ON ngay lúc mở GUI
-        // Điều này đảm bảo khi tắt module trong tab Active, nó không biến mất ngay lập tức
+        // 2. Chụp lại danh sách các module đang ON
         activeModulesSnapshot = ModuleManager.INSTANCE.getModules().stream()
                 .filter(Module::isEnabled)
                 .collect(Collectors.toList());
@@ -50,16 +48,15 @@ public class UtilityGui extends Screen {
 
         // --- CONSTANTS ---
         int tabHeight = 25;
-        int sidebarWidth = 80; // Dùng sidebar bên trái cho Tab nhìn sẽ gọn hơn là Top bar nếu nhiều Category
+        // int sidebarWidth = 80; // (Chưa dùng, có thể xóa hoặc để dành cho update sau)
         int startX = 20;
-        int startY = 40;
+        int tabY = 25; // Define tabY here to be safe
 
         // --- TITLE ---
         guiGraphics.drawCenteredString(this.font, "Advanced Utilities", this.width / 2, 15, 0xFFFFFF);
 
-        // --- RENDER TABS (Top Bar style cho gọn) ---
+        // --- RENDER TABS (Top Bar) ---
         int tabX = startX;
-        int tabY = 25;
         int tabWidth = 60;
 
         // Vẽ Tab ACTIVE (Index 0)
@@ -79,10 +76,10 @@ public class UtilityGui extends Screen {
         List<Module> modulesToDisplay;
 
         if (currentTabIndex == 0) {
-            // Tab ACTIVE: Hiển thị list đã chụp (snapshot)
+            // Tab ACTIVE: Hiển thị list snapshot
             modulesToDisplay = activeModulesSnapshot;
         } else {
-            // Tab Category: Lấy list từ Manager
+            // Tab Category: Lấy realtime từ Manager
             modulesToDisplay = ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
         }
 
@@ -100,21 +97,21 @@ public class UtilityGui extends Screen {
                 // Check hover
                 boolean isHovered = (mouseX >= gridX && mouseX <= gridX + btnWidth && mouseY >= gridY && mouseY <= gridY + btnHeight);
 
-                // Màu nút: Xanh (Bật) / Đỏ (Tắt) / Xám (Disable logic)
+                // Màu nút: Xanh (Bật) / Đỏ (Tắt)
                 int color = mod.isEnabled() ? new Color(46, 204, 113).getRGB() : new Color(231, 76, 60).getRGB();
 
                 // Vẽ box module
                 guiGraphics.fill(gridX, gridY, gridX + btnWidth, gridY + btnHeight, isHovered ? color : darken(color));
                 guiGraphics.drawCenteredString(this.font, mod.getName(), gridX + btnWidth / 2, gridY + 6, 0xFFFFFF);
 
-                // Tooltip (optional)
+                // Tooltip
                 if (isHovered) {
                     guiGraphics.renderTooltip(this.font, Component.literal(mod.getDescription()), mouseX, mouseY);
                 }
 
-                // Xuống dòng hoặc sang cột (Simple column layout)
+                // Xuống dòng hoặc sang cột mới
                 gridY += btnHeight + padding;
-                if (gridY > this.height - 30) { // Nếu dài quá thì sang cột mới
+                if (gridY > this.height - 30) {
                     gridY = tabY + tabHeight + 10;
                     gridX += btnWidth + padding;
                 }
@@ -122,7 +119,7 @@ public class UtilityGui extends Screen {
         }
     }
 
-    // Helper: Làm tối màu khi không hover
+    // Helper: Làm tối màu
     private int darken(int color) {
         Color c = new Color(color);
         return new Color((int)(c.getRed() * 0.7), (int)(c.getGreen() * 0.7), (int)(c.getBlue() * 0.7)).getRGB();
@@ -174,20 +171,22 @@ public class UtilityGui extends Screen {
 
         for (Module mod : modulesToDisplay) {
             if (isInside(mouseX, mouseY, gridX, gridY, btnWidth, btnHeight)) {
-                // Left Click (0) -> Toggle
+
+                // Left Click (0) -> Toggle Module
                 if (button == 0) {
                     mod.toggle();
-                    ConfigUtil.saveConfig();
+                    ConfigManager.save(); // <--- CẬP NHẬT: Gọi ConfigManager để lưu ngay lập tức
                     return true;
                 }
+
                 // Right Click (1) -> Open Settings
                 else if (button == 1) {
-                    // Mở màn hình Settings, truyền 'this' để làm parent (để nút Back hoạt động)
                     Minecraft.getInstance().setScreen(new ModuleSettingsScreen(this, mod));
                     return true;
                 }
             }
 
+            // Tính lại toạ độ y như logic render
             gridY += btnHeight + padding;
             if (gridY > this.height - 30) {
                 gridY = tabY + tabHeight + 10;

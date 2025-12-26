@@ -17,7 +17,6 @@ public class ModuleManager {
     private final List<Module> modules = new ArrayList<>();
 
     private ModuleManager() {
-        // Đăng ký các module
         register(new FullBright());
         register(new NoBreakDelay());
         register(new AutoFish());
@@ -28,7 +27,6 @@ public class ModuleManager {
         modules.add(module);
     }
 
-    // === THÊM HÀM QUAN TRỌNG NÀY ===
     @SuppressWarnings("unchecked")
     public <T extends Module> T getModule(Class<T> clazz) {
         for (Module module : modules) {
@@ -38,16 +36,18 @@ public class ModuleManager {
         }
         return null;
     }
-    // ===============================
 
     public List<Module> getModules() {
         return modules;
     }
 
+    // --- CẬP NHẬT PHẦN NÀY ---
     public void setModuleState(Module module, boolean state) {
         module.setEnabled(state);
-        ConfigUtil.saveConfig();
+        ConfigManager.save(); // Gọi Manager mới để lưu toàn bộ config (bao gồm settings)
     }
+    // --------------------------
+
     public List<Module> getModulesByCategory(Category category) {
         return modules.stream()
                 .filter(module -> module.getCategory() == category)
@@ -61,8 +61,10 @@ public class ModuleManager {
         }
     }
 
+    // --- CẬP NHẬT PHẦN NÀY ---
     public void init() {
         MinecraftForge.EVENT_BUS.register(this);
-        ConfigUtil.loadConfig();
+        ConfigManager.load(); // Gọi Manager mới để load tất cả
     }
+    // --------------------------
 }

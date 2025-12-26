@@ -12,4 +12,12 @@ public class EnumSetting<T extends Enum<T>> extends Setting<T> {
         int nextIndex = (value.ordinal() + 1) % modes.length;
         value = modes[nextIndex];
     }
+    public void setValueByName(String name) {
+        for (T constant : ((Class<T>) value.getClass()).getEnumConstants()) {
+            if (constant.name().equalsIgnoreCase(name)) {
+                this.value = constant;
+                return;
+            }
+        }
+    }
 }
