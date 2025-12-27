@@ -54,7 +54,7 @@ public class UtilityGui extends Screen {
     }
 
     private void initSettingsPanel(Module module) {
-        // Dọn dẹp widget cũ
+        // Clear old widgets
         for (AbstractWidget w : dynamicWidgets) this.removeWidget(w);
         dynamicWidgets.clear();
         customRenderWidgets.clear();
@@ -66,34 +66,27 @@ public class UtilityGui extends Screen {
         int startY = TOP_BAR_HEIGHT + 40;
         int widgetWidth = 200;
 
-        // Factory: Tạo Widget tương ứng với loại Setting
+        // --- REFACTOR START ---
+        // Use WidgetFactory instead of manual instanceof checks
         for (Setting<?> setting : module.getSettings()) {
-            SettingWidget widget = null;
+            // Determine height based on type (Lists need more space)
+            int height = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
+                    || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting) ? 55 : 20;
 
-            if (setting instanceof BooleanSetting s) {
-                widget = new BooleanWidget(s, startX, startY, widgetWidth, 20);
-            } else if (setting instanceof NumberSetting s) {
-                widget = new NumberWidget(s, startX, startY, widgetWidth, 20);
-            } else if (setting instanceof EnumSetting<?> s) {
-                widget = new EnumWidget(s, startX, startY, widgetWidth, 20);
-            } else if (setting instanceof BlockListSetting s) {
-                widget = new BlockListWidget(s, startX, startY, widgetWidth, 55);
-            } else if (setting instanceof EntityListSetting s) {
-                widget = new EntityListWidget(s, startX, startY, widgetWidth, 55);
-            }
+            // Use the Factory
+            SettingWidget widget = com.duox.advancedutilities.gui.factory.WidgetFactory.create(setting, startX, startY, widgetWidth, height);
 
             if (widget != null) {
-                // Khởi tạo và đăng ký widget
                 widget.init(w -> {
                     this.addRenderableWidget(w);
                     this.dynamicWidgets.add(w);
                 }, () -> {});
-                this.customRenderWidgets.add(widget);
 
-                // Tự động xuống dòng
+                this.customRenderWidgets.add(widget);
                 startY += widget.getHeight() + PADDING;
             }
         }
+        // --- REFACTOR END ---
     }
 
     @Override

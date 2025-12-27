@@ -70,14 +70,14 @@ public class AutoRightClick extends Module {
 
     private void performSpatialScan() {
         cachedTargetPositions.clear();
-        BlockPos playerPos = mc.player.blockPosition();
+        BlockPos playerPos = Objects.requireNonNull(mc.player).blockPosition();
         int r = range.getInt(); // Lấy giá trị Range
 
         for (int x = -r; x <= r; x++) {
             for (int y = -r; y <= r; y++) {
                 for (int z = -r; z <= r; z++) {
                     BlockPos targetPos = playerPos.offset(x, y, z);
-                    BlockState state = mc.level.getBlockState(targetPos);
+                    BlockState state = Objects.requireNonNull(mc.level).getBlockState(targetPos);
 
                     // Logic check Block
                     if (blocks.contains(state.getBlock())) {

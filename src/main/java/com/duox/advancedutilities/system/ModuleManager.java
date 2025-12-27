@@ -19,6 +19,16 @@ public class ModuleManager {
 
     private ModuleManager() {
         // Constructor is now empty or minimal
+        register(new FullBright());
+
+        // Player
+        register(new AutoFish());
+        register(new AutoRightClick());
+        register(new FastClick());
+        register(new NoBreakDelay());
+
+        // Misc
+        register(new AutoReconnect());
     }
 
     /**

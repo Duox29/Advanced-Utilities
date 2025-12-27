@@ -8,4 +8,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface IMultiPlayerGameModeAccessor {
     @Accessor("destroyDelay")
     void setDestroyDelay(int delay);
+    @Accessor("destroyDelay")
+    int getDestroyDelay();
 }

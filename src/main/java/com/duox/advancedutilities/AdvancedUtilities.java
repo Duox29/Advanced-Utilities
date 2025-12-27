@@ -1,16 +1,17 @@
 package com.duox.advancedutilities;
 
 import com.duox.advancedutilities.gui.UtilityGui;
-import com.duox.advancedutilities.system.BlockSelector; // [MỚI] Import BlockSelector
+import com.duox.advancedutilities.system.BlockSelector;
 import com.duox.advancedutilities.system.ConfigManager;
-import com.duox.advancedutilities.system.Module;      // [MỚI] Import Module
 import com.duox.advancedutilities.system.ModuleManager;
+import com.duox.advancedutilities.system.Module;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;            // [MỚI] Import TickEvent
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -26,21 +27,23 @@ public class AdvancedUtilities {
             "Advanced Utilities"
     );
 
-    public AdvancedUtilities() {
-        // Event Bus cho quá trình khởi chạy Mod (Setup, Register Keys)
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::registerKeys);
+    // [FIX] Constructor Injection: The modern way to get the Event Bus.
+    // This replaces the deprecated FMLJavaModLoadingContext.get()
+    public AdvancedUtilities(FMLJavaModLoadingContext context) {
+        IEventBus modEventBus = context.getModEventBus();
 
-        // Event Bus cho các sự kiện trong Game (Tick, Input, Render)
+        // Register Mod Lifecycle Events
+        modEventBus.addListener(this::clientSetup);
+        modEventBus.addListener(this::registerKeys);
+
+        // Register Game Events (Tick, Input, etc.)
         MinecraftForge.EVENT_BUS.register(this);
 
-        // --- [CRITICAL] Đăng ký BlockSelector ---
-        // Bắt buộc phải có dòng này để tính năng "Add Block" hoạt động
+        // Initialize Systems
         BlockSelector.INSTANCE.init();
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        // ModuleManager loading logic (nếu có)
         ModuleManager.INSTANCE.init();
         ConfigManager.load();
     }
@@ -56,15 +59,9 @@ public class AdvancedUtilities {
         }
     }
 
-    // --- [CRITICAL] Vòng lặp chính của Mod (Heartbeat) ---
-    // Hàm này sẽ chạy 20 lần/giây. Nó chịu trách nhiệm gọi onTick() cho các module.
-    // Nếu thiếu hàm này, AutoRightClick sẽ đứng im.
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
-        // Chỉ xử lý ở cuối tick (Phase.END) và khi đã vào game (player != null)
         if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
-
-            // Duyệt qua tất cả module, nếu đang BẬT thì gọi onTick()
             ModuleManager.INSTANCE.getModules().stream()
                     .filter(Module::isEnabled)
                     .forEach(Module::onTick);
