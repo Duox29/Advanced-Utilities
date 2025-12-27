@@ -20,6 +20,7 @@ public class ModuleManager {
         register(new AutoRightClick());
         register(new AutoReconnect());
         register(new FastClick());
+        register(new Finder());
     }
 
     private void register(Module module) {
