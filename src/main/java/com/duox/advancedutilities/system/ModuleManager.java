@@ -19,6 +19,7 @@ public class ModuleManager {
         register(new AutoFish());
         register(new AutoRightClick());
         register(new AutoReconnect());
+        register(new FastClick());
     }
 
     private void register(Module module) {
