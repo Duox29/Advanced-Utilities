@@ -6,49 +6,45 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class ModuleManager {
     public static final ModuleManager INSTANCE = new ModuleManager();
-    private final List<Module> modules = new ArrayList<>();
+
+    // Use a Map for O(1) lookup by class instead of looping
+    private final Map<Class<? extends Module>, Module> moduleMap = new LinkedHashMap<>();
 
     private ModuleManager() {
-        register(new FullBright());
-        register(new NoBreakDelay());
-        register(new AutoFish());
-        register(new AutoRightClick());
-        register(new AutoReconnect());
-        register(new FastClick());
+        // Constructor is now empty or minimal
     }
 
-    private void register(Module module) {
-        modules.add(module);
+    /**
+     * Registers a module instance.
+     * Call this from your Main class registration phase.
+     */
+    public void register(Module module) {
+        moduleMap.put(module.getClass(), module);
     }
 
     @SuppressWarnings("unchecked")
     public <T extends Module> T getModule(Class<T> clazz) {
-        for (Module module : modules) {
-            if (module.getClass() == clazz) {
-                return (T) module;
-            }
-        }
-        return null;
+        return (T) moduleMap.get(clazz);
     }
 
     public List<Module> getModules() {
-        return modules;
+        return new ArrayList<>(moduleMap.values());
     }
 
-    // --- CẬP NHẬT PHẦN NÀY ---
     public void setModuleState(Module module, boolean state) {
         module.setEnabled(state);
-        ConfigManager.save(); // Gọi Manager mới để lưu toàn bộ config (bao gồm settings)
+        ConfigManager.save();
     }
-    // --------------------------
 
     public List<Module> getModulesByCategory(Category category) {
-        return modules.stream()
+        return moduleMap.values().stream()
                 .filter(module -> module.getCategory() == category)
                 .collect(Collectors.toList());
     }
@@ -56,14 +52,15 @@ public class ModuleManager {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            modules.stream().filter(Module::isEnabled).forEach(Module::onTick);
+            moduleMap.values().stream()
+                    .filter(Module::isEnabled)
+                    .forEach(Module::onTick);
         }
     }
 
-    // --- CẬP NHẬT PHẦN NÀY ---
     public void init() {
         MinecraftForge.EVENT_BUS.register(this);
-        ConfigManager.load(); // Gọi Manager mới để load tất cả
+        // Note: Load config AFTER modules are registered externally
+        ConfigManager.load();
     }
-    // --------------------------
 }
