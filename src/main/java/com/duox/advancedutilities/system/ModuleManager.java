@@ -18,8 +18,7 @@ public class ModuleManager {
     private final Map<Class<? extends Module>, Module> moduleMap = new LinkedHashMap<>();
 
     private ModuleManager() {
-        // Constructor is now empty or minimal
-        register(new FullBright());
+
 
         // Player
         register(new AutoFish());
@@ -29,6 +28,10 @@ public class ModuleManager {
 
         // Misc
         register(new AutoReconnect());
+
+        //Render
+        register(new FullBright());
+        register(new Finder());
     }
 
     /**
