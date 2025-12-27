@@ -7,6 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -14,8 +15,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
 
 public class ConfigManager {
 
@@ -23,7 +23,7 @@ public class ConfigManager {
     private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("advancedutilities.json");
 
     public static void load() {
-        System.out.println("[AdvancedUtilities] Loading config from " + CONFIG_PATH); // Debug log
+        System.out.println("[AdvancedUtilities] Loading config from " + CONFIG_PATH);
 
         if (!Files.exists(CONFIG_PATH)) {
             System.out.println("[AdvancedUtilities] Config file not found, creating default.");
@@ -34,9 +34,6 @@ public class ConfigManager {
         try (Reader reader = new FileReader(CONFIG_PATH.toFile())) {
             JsonObject json = GSON.fromJson(reader, JsonObject.class);
             if (json == null) return;
-
-            // Debug: Kiểm tra xem có bao nhiêu module đang được load
-            System.out.println("[AdvancedUtilities] Modules registered: " + ModuleManager.INSTANCE.getModules().size());
 
             for (Module module : ModuleManager.INSTANCE.getModules()) {
                 if (json.has(module.getName())) {
@@ -55,9 +52,8 @@ public class ConfigManager {
             }
             System.out.println("[AdvancedUtilities] Config loaded successfully.");
         } catch (JsonSyntaxException e) {
-            System.err.println("[AdvancedUtilities] Config JSON is malformed! Resetting to prevent crash.");
+            System.err.println("[AdvancedUtilities] Config JSON is malformed! Resetting.");
             e.printStackTrace();
-            // Tùy chọn: Backup file cũ trước khi save đè lên
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -68,7 +64,6 @@ public class ConfigManager {
 
         for (Module module : ModuleManager.INSTANCE.getModules()) {
             JsonObject moduleJson = new JsonObject();
-
             moduleJson.addProperty("enabled", module.isEnabled());
 
             JsonObject settingsJson = new JsonObject();
@@ -84,7 +79,6 @@ public class ConfigManager {
             if (!Files.exists(FMLPaths.CONFIGDIR.get())) {
                 Files.createDirectories(FMLPaths.CONFIGDIR.get());
             }
-
             try (Writer writer = new FileWriter(CONFIG_PATH.toFile())) {
                 GSON.toJson(json, writer);
             }
@@ -101,12 +95,19 @@ public class ConfigManager {
         } else if (setting instanceof EnumSetting<?> s) {
             json.addProperty(s.getName(), s.getValue().name());
         } else if (setting instanceof BlockListSetting s) {
-            List<String> ids = new ArrayList<>();
-            for (Block block : s.getValue()) {
+            JsonObject map = new JsonObject();
+            s.getValue().forEach((block, enabled) -> {
                 ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
-                if (key != null) ids.add(key.toString());
-            }
-            json.add(s.getName(), GSON.toJsonTree(ids));
+                if (key != null) map.addProperty(key.toString(), enabled);
+            });
+            json.add(s.getName(), map);
+        } else if (setting instanceof EntityListSetting s) {
+            JsonObject map = new JsonObject();
+            s.getValue().forEach((type, enabled) -> {
+                ResourceLocation key = ForgeRegistries.ENTITY_TYPES.getKey(type);
+                if (key != null) map.addProperty(key.toString(), enabled);
+            });
+            json.add(s.getName(), map);
         }
     }
 
@@ -122,21 +123,37 @@ public class ConfigManager {
                     s.setValue(element.getAsDouble());
                 } else if (setting instanceof EnumSetting<?> s) {
                     s.setValueByName(element.getAsString());
-                } else if (setting instanceof BlockListSetting s) {
-                    List<Block> blocks = new ArrayList<>();
-                    if (element.isJsonArray()) {
-                        for (JsonElement idElement : element.getAsJsonArray()) {
-                            try {
-                                ResourceLocation rl = new ResourceLocation(idElement.getAsString());
-                                if (ForgeRegistries.BLOCKS.containsKey(rl)) {
-                                    blocks.add(ForgeRegistries.BLOCKS.getValue(rl));
-                                }
-                            } catch (Exception ex) {
-                                System.err.println("Invalid block ID in config: " + idElement.getAsString());
+                }
+                // --- FIX LOGIC LOAD BLOCK LIST ---
+                else if (setting instanceof BlockListSetting s) {
+                    LinkedHashMap<Block, Boolean> map = new LinkedHashMap<>();
+                    if (element.isJsonObject()) {
+                        JsonObject obj = element.getAsJsonObject();
+                        for (String key : obj.keySet()) {
+                            // [FIX] Dùng tryParse thay vì new ResourceLocation để tránh crash và warning
+                            ResourceLocation rl = ResourceLocation.tryParse(key);
+                            if (rl != null && ForgeRegistries.BLOCKS.containsKey(rl)) {
+                                map.put(ForgeRegistries.BLOCKS.getValue(rl), obj.get(key).getAsBoolean());
                             }
                         }
-                        s.setValue(blocks);
                     }
+                    // [QUAN TRỌNG] Dòng này bị thiếu trong code cũ
+                    s.setValue(map);
+                }
+                // --- FIX LOGIC LOAD ENTITY LIST ---
+                else if (setting instanceof EntityListSetting s) {
+                    LinkedHashMap<EntityType<?>, Boolean> map = new LinkedHashMap<>();
+                    if (element.isJsonObject()) {
+                        JsonObject obj = element.getAsJsonObject();
+                        for (String key : obj.keySet()) {
+                            // [FIX] Dùng tryParse
+                            ResourceLocation rl = ResourceLocation.tryParse(key);
+                            if (rl != null && ForgeRegistries.ENTITY_TYPES.containsKey(rl)) {
+                                map.put(ForgeRegistries.ENTITY_TYPES.getValue(rl), obj.get(key).getAsBoolean());
+                            }
+                        }
+                    }
+                    s.setValue(map);
                 }
             } catch (Exception e) {
                 System.err.println("Error loading setting " + setting.getName() + ": " + e.getMessage());
