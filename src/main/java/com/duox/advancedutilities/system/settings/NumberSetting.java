@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.system.settings;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+
 public class NumberSetting extends Setting<Double> {
     private final double min;
     private final double max;
@@ -14,17 +17,28 @@ public class NumberSetting extends Setting<Double> {
 
     public double getMin() { return min; }
     public double getMax() { return max; }
-
-    // FIX: Thêm Getter cho increment để GUI có thể sử dụng
     public double getIncrement() { return increment; }
 
-    // Helper để lấy giá trị int cho gọn (dùng cho tick delay, timeout...)
     public int getInt() { return value.intValue(); }
 
-    // Logic làm tròn theo increment
     @Override
     public void setValue(Double val) {
         double precision = 1.0 / increment;
         super.setValue(Math.round(Math.max(min, Math.min(max, val)) * precision) / precision);
+    }
+
+    // --- Polymorphic Serialization ---
+
+    @Override
+    public JsonElement save() {
+        return new JsonPrimitive(this.value);
+    }
+
+    @Override
+    public void load(JsonElement element) {
+        // Validation: Ensure it's a number to avoid ClassCastExceptions
+        if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()) {
+            this.setValue(element.getAsDouble());
+        }
     }
 }

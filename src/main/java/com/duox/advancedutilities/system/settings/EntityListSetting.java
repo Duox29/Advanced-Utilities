@@ -1,7 +1,11 @@
 package com.duox.advancedutilities.system.settings;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
-import java.util.ArrayList;
+import net.minecraftforge.registries.ForgeRegistries;
+
 import java.util.LinkedHashMap;
 
 public class EntityListSetting extends Setting<LinkedHashMap<EntityType<?>, Boolean>> {
@@ -25,8 +29,36 @@ public class EntityListSetting extends Setting<LinkedHashMap<EntityType<?>, Bool
         }
     }
 
-    // [FIX 2] Thêm hàm contains
     public boolean contains(EntityType<?> entity) {
         return value.getOrDefault(entity, false);
+    }
+
+    // --- Polymorphic Serialization ---
+
+    @Override
+    public JsonElement save() {
+        JsonObject map = new JsonObject();
+        this.value.forEach((type, enabled) -> {
+            ResourceLocation key = ForgeRegistries.ENTITY_TYPES.getKey(type);
+            if (key != null) map.addProperty(key.toString(), enabled);
+        });
+        return map;
+    }
+
+    @Override
+    public void load(JsonElement element) {
+        if (!element.isJsonObject()) return;
+
+        LinkedHashMap<EntityType<?>, Boolean> newMap = new LinkedHashMap<>();
+        JsonObject obj = element.getAsJsonObject();
+
+        for (String key : obj.keySet()) {
+            // Safe parsing to avoid crashes if config contains invalid IDs
+            ResourceLocation rl = ResourceLocation.tryParse(key);
+            if (rl != null && ForgeRegistries.ENTITY_TYPES.containsKey(rl)) {
+                newMap.put(ForgeRegistries.ENTITY_TYPES.getValue(rl), obj.get(key).getAsBoolean());
+            }
+        }
+        this.value = newMap;
     }
 }
