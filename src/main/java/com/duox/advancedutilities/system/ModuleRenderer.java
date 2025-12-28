@@ -13,6 +13,9 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import java.util.OptionalDouble;
 
 import java.awt.Color;
 
@@ -74,4 +77,5 @@ public class ModuleRenderer {
         poseStack.popPose();
         bufferSource.endBatch(RenderType.lines()); // Force draw
     }
+    
 }

@@ -59,6 +59,8 @@ public class Finder extends Module {
     public void onDisable() {
         foundBlocks.clear();
         foundEntities.clear();
+        // Optional: Cancel any running CompletableFuture if you hold a reference to it
+        isScanningBlocks.set(false);
     }
 
     @Override
