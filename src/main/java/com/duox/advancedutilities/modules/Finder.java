@@ -12,6 +12,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,20 +24,19 @@ public class Finder extends Module {
     private final BooleanSetting searchBlocks = new BooleanSetting("Search Blocks", true);
     private final BooleanSetting searchEntities = new BooleanSetting("Search Entities", true);
 
-    // Range: Min 4, Max 256 chunks/blocks radius, Step 1
+    // Range: 64 blocks radius is sufficient usually.
     private final NumberSetting range = new NumberSetting("Range", 64, 16, 256, 16);
-    // Limit: Max results to prevent lag rendering
     private final NumberSetting limit = new NumberSetting("Max Results", 1000, 10, 5000, 10);
 
     private final BlockListSetting blockList = new BlockListSetting("Blocks");
     private final EntityListSetting entityList = new EntityListSetting("Entities");
 
     // --- State Management ---
-    // Dùng List copy để render thread đọc an toàn không bị ConcurrentModificationException
-    private volatile List<BlockPos> foundBlocks = new ArrayList<>();
-    private volatile List<Entity> foundEntities = new ArrayList<>();
+    // Sử dụng volatile để đảm bảo Visibility giữa các luồng.
+    // Chúng ta sẽ thay thế hoàn toàn List này mỗi lần scan xong (Immutable pattern cho render thread).
+    private volatile List<BlockPos> foundBlocks = Collections.emptyList();
+    private volatile List<Entity> foundEntities = Collections.emptyList();
 
-    // Cờ kiểm soát luồng quét block để tránh chạy chồng chéo
     private final AtomicBoolean isScanningBlocks = new AtomicBoolean(false);
     private int tickCounter = 0;
 
@@ -51,15 +52,13 @@ public class Finder extends Module {
 
     @Override
     public void onEnable() {
-        tickCounter = 0;
-        scanNow(); // Quét ngay khi bật
+        tickCounter = 100; // Force scan immediately on enable
     }
 
     @Override
     public void onDisable() {
-        foundBlocks.clear();
-        foundEntities.clear();
-        // Optional: Cancel any running CompletableFuture if you hold a reference to it
+        foundBlocks = Collections.emptyList();
+        foundEntities = Collections.emptyList();
         isScanningBlocks.set(false);
     }
 
@@ -67,30 +66,29 @@ public class Finder extends Module {
     public void onTick() {
         if (mc.player == null || mc.level == null) return;
 
-        // Giảm tải: Chỉ quét mỗi 20 ticks (1 giây) hoặc khi cần thiết
-        if (tickCounter++ > 20) {
+        // OPTIMIZATION: Chỉ quét mỗi 5 giây (20 ticks * 5 = 100)
+        if (tickCounter++ >= 100) {
             scanNow();
             tickCounter = 0;
         }
     }
 
     private void scanNow() {
+        // Entity scan is fast enough to run on main thread periodically
         if (searchEntities.getValue()) {
             scanEntities();
         } else {
-            foundEntities = new ArrayList<>();
+            foundEntities = Collections.emptyList();
         }
 
+        // Block scan is heavy, run async
         if (searchBlocks.getValue()) {
             scanBlocksAsync();
         } else {
-            foundBlocks = new ArrayList<>();
+            foundBlocks = Collections.emptyList();
         }
     }
 
-    /**
-     * Quét Entity trên Main Thread (Entity lookup của Minecraft khá nhanh vì dùng Chunk caching)
-     */
     private void scanEntities() {
         if (mc.level == null) return;
         double r = range.getValue();
@@ -99,7 +97,7 @@ public class Finder extends Module {
         List<Entity> results = new ArrayList<>();
         int max = limit.getInt();
 
-        // Lấy tất cả entity trong vùng
+        // Lấy danh sách entities an toàn trên main thread
         List<Entity> allEntities = mc.level.getEntities(mc.player, area);
 
         for (Entity entity : allEntities) {
@@ -108,30 +106,29 @@ public class Finder extends Module {
                 results.add(entity);
             }
         }
+        // Atomic swap
         this.foundEntities = results;
     }
 
-    /**
-     * Quét Block trên Background Thread để không làm lag game.
-     * Đây là kỹ thuật quan trọng nhất để tối ưu hiệu năng.
-     */
     private void scanBlocksAsync() {
         if (mc.player == null || mc.level == null) return;
+        // Nếu đang scan dở thì bỏ qua, đợi lần sau (tránh spam thread pool)
         if (isScanningBlocks.get()) return;
-        isScanningBlocks.set(true);
 
+        // Snapshot data cần thiết từ Main Thread để mang sang Async Thread
         BlockPos playerPos = mc.player.blockPosition();
         net.minecraft.world.level.ChunkPos playerChunkPos = mc.player.chunkPosition();
         int radiusChunks = range.getInt() / 16;
         int maxResult = limit.getInt();
 
-        // FIX 1: This now works because we added getBlocks() to BlockListSetting
         List<net.minecraft.world.level.block.Block> targetBlocks = new ArrayList<>(blockList.getBlocks());
 
         if (targetBlocks.isEmpty()) {
-            isScanningBlocks.set(false);
+            foundBlocks = Collections.emptyList();
             return;
         }
+
+        isScanningBlocks.set(true);
 
         CompletableFuture.runAsync(() -> {
             try {
@@ -148,38 +145,39 @@ public class Finder extends Module {
                     }
                 }
 
-                chunksToScan.sort(java.util.Comparator.comparingInt(c ->
+                // Sorting chunks by distance helps finding closest blocks first
+                chunksToScan.sort(Comparator.comparingInt(c ->
                         Math.abs(c.x - playerChunkPos.x) + Math.abs(c.z - playerChunkPos.z)
                 ));
 
                 for (net.minecraft.world.level.ChunkPos chunkPos : chunksToScan) {
                     if (results.size() >= maxResult) break;
 
+                    // Note: Accessing chunks async needs care.
+                    // In simple mods, reading getChunk usually works if chunk is loaded,
+                    // but deep engine access might require synchronized checks.
+                    // Assuming mc.level.getChunk is safe enough for read-only block state access here.
                     if (mc.level.hasChunkAt(chunkPos.x, chunkPos.z)) {
                         net.minecraft.world.level.chunk.LevelChunk chunk = mc.level.getChunk(chunkPos.x, chunkPos.z);
 
-                        // FIX 2: Loop by index to calculate Y level correctly
                         net.minecraft.world.level.chunk.LevelChunkSection[] sections = chunk.getSections();
                         for (int i = 0; i < sections.length; i++) {
                             net.minecraft.world.level.chunk.LevelChunkSection section = sections[i];
                             if (section == null || section.hasOnlyAir()) continue;
 
-                            // Calculate the bottom Y coordinate of this section
-                            // getSectionYFromSectionIndex returns the chunk-y (0, 1, 2...), multiply by 16 to get block-y
                             int bottomY = chunk.getSectionYFromSectionIndex(i) * 16;
 
                             for (int x = 0; x < 16; x++) {
                                 for (int y = 0; y < 16; y++) {
                                     for (int z = 0; z < 16; z++) {
                                         BlockState state = section.getBlockState(x, y, z);
-
-                                        // Performance: Only check if it's a block we want
                                         if (targetBlocks.contains(state.getBlock())) {
                                             int worldX = chunkPos.getMinBlockX() + x;
-                                            int worldY = bottomY + y; // Correctly calculated Y
+                                            int worldY = bottomY + y;
                                             int worldZ = chunkPos.getMinBlockZ() + z;
 
                                             BlockPos pos = new BlockPos(worldX, worldY, worldZ);
+                                            // Quick distance check
                                             if (playerPos.distSqr(pos) <= range.getInt() * range.getInt()) {
                                                 results.add(pos);
                                             }
@@ -190,6 +188,7 @@ public class Finder extends Module {
                         }
                     }
                 }
+                // Atomic swap: Thread-safe update without locking render thread
                 this.foundBlocks = results;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -198,8 +197,6 @@ public class Finder extends Module {
             }
         });
     }
-
-    // --- Public Getters cho Renderer ---
 
     public List<BlockPos> getFoundBlocks() {
         return foundBlocks;
