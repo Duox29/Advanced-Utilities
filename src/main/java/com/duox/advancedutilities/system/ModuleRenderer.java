@@ -1,5 +1,5 @@
 package com.duox.advancedutilities.system;
-
+import net.minecraft.util.Mth;
 import com.duox.advancedutilities.modules.Finder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -61,9 +61,9 @@ public class ModuleRenderer {
         float rE = 1.0f, gE = 0.0f, bE = 0.0f, aE = 1.0f;
         for (Entity entity : finder.getFoundEntities()) {
             // Lấy bounding box nội suy theo partial ticks để mượt mà
-            double x = androidLerp(entity.xo, entity.getX(), event.getPartialTick());
-            double y = androidLerp(entity.yo, entity.getY(), event.getPartialTick());
-            double z = androidLerp(entity.zo, entity.getZ(), event.getPartialTick());
+            double x = Mth.lerp(event.getPartialTick(), entity.xo, entity.getX());
+            double y = Mth.lerp(event.getPartialTick(), entity.yo, entity.getY());
+            double z = Mth.lerp(event.getPartialTick(), entity.zo, entity.getZ());
 
             // Vì chúng ta đã translate cả poseStack, ta cần vẽ box tại vị trí thực
             // bounding box của entity là dynamic
@@ -73,10 +73,5 @@ public class ModuleRenderer {
 
         poseStack.popPose();
         bufferSource.endBatch(RenderType.lines()); // Force draw
-    }
-
-    // Helper function for linear interpolation
-    private double androidLerp(double start, double end, float step) {
-        return start + (end - start) * step;
     }
 }

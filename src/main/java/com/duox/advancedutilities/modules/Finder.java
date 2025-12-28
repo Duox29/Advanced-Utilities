@@ -8,10 +8,8 @@ import com.duox.advancedutilities.system.settings.EntityListSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -116,45 +114,80 @@ public class Finder extends Module {
      * Đây là kỹ thuật quan trọng nhất để tối ưu hiệu năng.
      */
     private void scanBlocksAsync() {
-        // Nếu đang quét dở thì bỏ qua để tránh spam thread
         if (mc.player == null || mc.level == null) return;
         if (isScanningBlocks.get()) return;
         isScanningBlocks.set(true);
 
-        // Snapshot các giá trị cần thiết từ main thread để đưa vào worker thread
         BlockPos playerPos = mc.player.blockPosition();
-        int r = range.getInt();
-        int max = limit.getInt();
+        net.minecraft.world.level.ChunkPos playerChunkPos = mc.player.chunkPosition();
+        int radiusChunks = range.getInt() / 16;
+        int maxResult = limit.getInt();
 
-        // Chạy bất đồng bộ
+        // FIX 1: This now works because we added getBlocks() to BlockListSetting
+        List<net.minecraft.world.level.block.Block> targetBlocks = new ArrayList<>(blockList.getBlocks());
+
+        if (targetBlocks.isEmpty()) {
+            isScanningBlocks.set(false);
+            return;
+        }
+
         CompletableFuture.runAsync(() -> {
             try {
                 List<BlockPos> results = new ArrayList<>();
+                int minX = playerChunkPos.x - radiusChunks;
+                int maxX = playerChunkPos.x + radiusChunks;
+                int minZ = playerChunkPos.z - radiusChunks;
+                int maxZ = playerChunkPos.z + radiusChunks;
 
-                // Thuật toán quét: Quét từ tâm ra ngoài (để ưu tiên block gần người chơi nhất)
-                // Dùng vòng lặp đơn giản cho hiệu năng cao thay vì Stream API
-                for (int x = -r; x <= r; x++) {
-                    for (int y = -r; y <= r; y++) {
-                        for (int z = -r; z <= r; z++) {
-                            if (results.size() >= max) break;
+                List<net.minecraft.world.level.ChunkPos> chunksToScan = new ArrayList<>();
+                for (int x = minX; x <= maxX; x++) {
+                    for (int z = minZ; z <= maxZ; z++) {
+                        chunksToScan.add(new net.minecraft.world.level.ChunkPos(x, z));
+                    }
+                }
 
-                            // Tối ưu: Kiểm tra khoảng cách Manhattan hoặc Euclidean trước khi getBlockState
-                            // ở đây dùng tọa độ tương đối để loop cho nhanh
-                            BlockPos pos = playerPos.offset(x, y, z);
+                chunksToScan.sort(java.util.Comparator.comparingInt(c ->
+                        Math.abs(c.x - playerChunkPos.x) + Math.abs(c.z - playerChunkPos.z)
+                ));
 
-                            // Lưu ý: Access world từ thread khác main thread có thể nguy hiểm nếu world thay đổi chunk.
-                            // Tuy nhiên, chỉ đọc getBlockState thường an toàn trong phạm vi loaded chunks.
-                            // Để an toàn tuyệt đối, cần check chunk loaded trước.
-                            if (mc.level.hasChunkAt(pos)) {
-                                BlockState state = mc.level.getBlockState(pos);
-                                if (blockList.contains(state.getBlock())) {
-                                    results.add(pos);
+                for (net.minecraft.world.level.ChunkPos chunkPos : chunksToScan) {
+                    if (results.size() >= maxResult) break;
+
+                    if (mc.level.hasChunkAt(chunkPos.x, chunkPos.z)) {
+                        net.minecraft.world.level.chunk.LevelChunk chunk = mc.level.getChunk(chunkPos.x, chunkPos.z);
+
+                        // FIX 2: Loop by index to calculate Y level correctly
+                        net.minecraft.world.level.chunk.LevelChunkSection[] sections = chunk.getSections();
+                        for (int i = 0; i < sections.length; i++) {
+                            net.minecraft.world.level.chunk.LevelChunkSection section = sections[i];
+                            if (section == null || section.hasOnlyAir()) continue;
+
+                            // Calculate the bottom Y coordinate of this section
+                            // getSectionYFromSectionIndex returns the chunk-y (0, 1, 2...), multiply by 16 to get block-y
+                            int bottomY = chunk.getSectionYFromSectionIndex(i) * 16;
+
+                            for (int x = 0; x < 16; x++) {
+                                for (int y = 0; y < 16; y++) {
+                                    for (int z = 0; z < 16; z++) {
+                                        BlockState state = section.getBlockState(x, y, z);
+
+                                        // Performance: Only check if it's a block we want
+                                        if (targetBlocks.contains(state.getBlock())) {
+                                            int worldX = chunkPos.getMinBlockX() + x;
+                                            int worldY = bottomY + y; // Correctly calculated Y
+                                            int worldZ = chunkPos.getMinBlockZ() + z;
+
+                                            BlockPos pos = new BlockPos(worldX, worldY, worldZ);
+                                            if (playerPos.distSqr(pos) <= range.getInt() * range.getInt()) {
+                                                results.add(pos);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                // Cập nhật kết quả atomic
                 this.foundBlocks = results;
             } catch (Exception e) {
                 e.printStackTrace();

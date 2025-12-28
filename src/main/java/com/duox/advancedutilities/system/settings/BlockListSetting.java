@@ -29,6 +29,15 @@ public class BlockListSetting extends Setting<LinkedHashMap<Block, Boolean>> {
     public boolean contains(Block block) {
         return value.getOrDefault(block, false);
     }
+    // Add this method to allow the Finder module to retrieve the list of blocks to search for
+    public java.util.List<Block> getBlocks() {
+        java.util.List<Block> list = new java.util.ArrayList<>();
+        // Iterate through the map and only add blocks that are enabled (true)
+        this.value.forEach((block, enabled) -> {
+            if (enabled) list.add(block);
+        });
+        return list;
+    }
 
     @Override
     public JsonElement save() {
