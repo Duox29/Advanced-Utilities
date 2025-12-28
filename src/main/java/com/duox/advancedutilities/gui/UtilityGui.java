@@ -1,6 +1,6 @@
 package com.duox.advancedutilities.gui;
 
-import com.duox.advancedutilities.gui.widgets.*; // Import tất cả Widget
+import com.duox.advancedutilities.gui.widgets.*;
 import com.duox.advancedutilities.system.*;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.*;
@@ -17,20 +17,18 @@ import java.util.stream.Collectors;
 
 public class UtilityGui extends Screen {
 
-    // --- Layout Constants ---
+    // ... (Constants and State fields remain unchanged) ...
     private static final int TOP_BAR_HEIGHT = 30;
     private static final int SIDEBAR_WIDTH = 120;
     private static final int MODULE_BTN_HEIGHT = 22;
     private static final int MODULE_BTN_WIDTH = 100;
     private static final int PADDING = 5;
 
-    // --- State ---
     private int currentTabIndex = 0;
     private final List<Category> categories = new ArrayList<>();
     private List<Module> activeModulesSnapshot;
     private Module selectedModule = null;
 
-    // --- Widget Management ---
     private final List<AbstractWidget> dynamicWidgets = new ArrayList<>();
     private final List<SettingWidget> customRenderWidgets = new ArrayList<>();
 
@@ -38,6 +36,7 @@ public class UtilityGui extends Screen {
         super(Component.literal("Advanced Utilities"));
     }
 
+    // ... (init method remains unchanged) ...
     @Override
     protected void init() {
         super.init();
@@ -66,41 +65,39 @@ public class UtilityGui extends Screen {
         int startY = TOP_BAR_HEIGHT + 40;
         int widgetWidth = 200;
 
-        // --- REFACTOR START ---
-        // Use WidgetFactory instead of manual instanceof checks
         for (Setting<?> setting : module.getSettings()) {
-            // Determine height based on type (Lists need more space)
             int height = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
                     || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting) ? 55 : 20;
 
-            // Use the Factory
             SettingWidget widget = com.duox.advancedutilities.gui.factory.WidgetFactory.create(setting, startX, startY, widgetWidth, height);
 
             if (widget != null) {
+                // ARCHITECTURE FIX: Pass a callback that re-runs initSettingsPanel to refresh layout
                 widget.init(w -> {
                     this.addRenderableWidget(w);
                     this.dynamicWidgets.add(w);
-                }, () -> {});
+                }, () -> this.initSettingsPanel(this.selectedModule)); // <--- The Fix
 
                 this.customRenderWidgets.add(widget);
+                // Now widget.getHeight() returns the CORRECT expanded height because we updated the widgets logic
                 startY += widget.getHeight() + PADDING;
             }
         }
-        // --- REFACTOR END ---
     }
 
+    // ... (Rest of the file remains unchanged: render, renderModuleList, mouseClicked, Helpers) ...
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(guiGraphics);
 
-        // 1. Vẽ khung nền
+        // 1. Draw Background
         guiGraphics.fill(0, TOP_BAR_HEIGHT, SIDEBAR_WIDTH, this.height, 0xAA000000);
         guiGraphics.fill(SIDEBAR_WIDTH, TOP_BAR_HEIGHT, this.width, this.height, 0x80000000);
         guiGraphics.vLine(SIDEBAR_WIDTH, TOP_BAR_HEIGHT, this.height, 0xFFFFFFFF);
         guiGraphics.hLine(0, this.width, TOP_BAR_HEIGHT, 0xFFFFFFFF);
         guiGraphics.drawString(this.font, "Adv. Utils", 10, 11, 0xFFFFFF, false);
 
-        // 2. Vẽ Tabs (Top Bar)
+        // 2. Draw Tabs
         int tabX = 80;
         boolean isActiveTab = (currentTabIndex == 0);
         drawTabButton(guiGraphics, tabX, 2, 60, 26, "ACTIVE", isActiveTab, mouseX, mouseY);
@@ -111,13 +108,12 @@ public class UtilityGui extends Screen {
             tabX += 65;
         }
 
-        // 3. Vẽ danh sách Module (Sidebar)
+        // 3. Draw Module List
         renderModuleList(guiGraphics, mouseX, mouseY);
 
-        // 4. Vẽ tiêu đề Settings & Custom Widgets
+        // 4. Draw Settings
         if (selectedModule != null) {
             guiGraphics.drawString(this.font, "Settings: " + selectedModule.getName(), SIDEBAR_WIDTH + 20, TOP_BAR_HEIGHT + 15, 0xFFFF00, false);
-            // Gọi hàm render của các custom widget (ví dụ BlockListWidget cần vẽ item)
             for (SettingWidget w : customRenderWidgets) {
                 w.render(guiGraphics, mouseX, mouseY, partialTick);
             }
@@ -129,6 +125,7 @@ public class UtilityGui extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
+    // ... (Keep renderModuleList and mouseClicked and Helpers exactly as provided) ...
     private void renderModuleList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         List<Module> modulesToDisplay = (currentTabIndex == 0) ? activeModulesSnapshot : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
         int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2;
@@ -155,7 +152,6 @@ public class UtilityGui extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Ưu tiên 1: Click vào Settings (Custom Widget)
         if (mouseX > SIDEBAR_WIDTH) {
             for (SettingWidget w : customRenderWidgets) {
                 if (w.mouseClicked(mouseX, mouseY, button)) return true;
@@ -163,7 +159,6 @@ public class UtilityGui extends Screen {
             if (super.mouseClicked(mouseX, mouseY, button)) return true;
         }
 
-        // Ưu tiên 2: Click vào Top Bar (Tabs)
         if (mouseY < TOP_BAR_HEIGHT) {
             int tabX = 80;
             if (isInside(mouseX, mouseY, tabX, 2, 60, 26)) { currentTabIndex = 0; return true; }
@@ -173,7 +168,6 @@ public class UtilityGui extends Screen {
                 tabX += 65;
             }
         }
-        // Ưu tiên 3: Click vào Sidebar (Module List)
         else if (mouseX <= SIDEBAR_WIDTH) {
             List<Module> modulesToDisplay = (currentTabIndex == 0) ? activeModulesSnapshot : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
             int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2;
@@ -190,7 +184,6 @@ public class UtilityGui extends Screen {
         return false;
     }
 
-    // Helpers
     private boolean isInside(double mx, double my, int x, int y, int w, int h) { return mx >= x && mx <= x + w && my >= y && my <= y + h; }
     private int darken(int color) { Color c = new Color(color); return new Color((int)(c.getRed() * 0.7), (int)(c.getGreen() * 0.7), (int)(c.getBlue() * 0.7)).getRGB(); }
     private void drawTabButton(GuiGraphics g, int x, int y, int w, int h, String t, boolean s, int mx, int my) {
