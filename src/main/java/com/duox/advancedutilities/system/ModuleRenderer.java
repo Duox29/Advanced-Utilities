@@ -77,9 +77,10 @@ public class ModuleRenderer {
 
         // --- PHASE 2: RENDER ENTITIES (LINES) ---
         // Đặt lại Shader cho Lines (nếu cần đổi shader, nhưng PositionColor dùng chung được)
+        RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
         RenderSystem.lineWidth(2.0f); // Độ dày nét vẽ
 
-        buffer.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR); // Thay đổi mode sang LINES
+        buffer.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL); // Thay đổi mode sang LINES
 
         float rE = 1.0f, gE = 0.2f, bE = 0.2f, aE = 1.0f; // Đỏ
         var entities = finder.getFoundEntities();
@@ -163,33 +164,33 @@ public class ModuleRenderer {
         var matrix = stack.last().pose();
 
         // Bottom
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
+        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
 
         // Top
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
+        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
 
         // Sides
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
+        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
     }
 }
