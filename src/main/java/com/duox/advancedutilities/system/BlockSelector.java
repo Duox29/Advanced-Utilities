@@ -9,7 +9,7 @@ import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-/**
+/*
  * Handles block selection for BlockListSetting.
  * Allows users to right-click blocks in the world to add them to a block list.
  */

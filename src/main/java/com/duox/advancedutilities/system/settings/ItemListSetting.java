@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.system.settings;
-
+/*
+ * Setting that stores a map of Item -> Boolean.
+ * Used for item filtering/whitelisting.
+ */
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;

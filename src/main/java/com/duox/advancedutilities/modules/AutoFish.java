@@ -9,13 +9,13 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.phys.Vec3;
 
-/**
+/*
  * Automatically fishes using a fishing rod.
  * Supports two modes: XP mode (waits for XP gain) and Normal mode (uses fixed delay).
  */
 public class AutoFish extends Module {
 
-    /**
+    /*
      * Fishing mode options.
      */
     public enum FishMode {

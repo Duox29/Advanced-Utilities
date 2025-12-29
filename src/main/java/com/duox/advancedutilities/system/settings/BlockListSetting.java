@@ -1,5 +1,4 @@
 package com.duox.advancedutilities.system.settings;
-
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
@@ -7,7 +6,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 
 public class BlockListSetting extends Setting<LinkedHashMap<Block, Boolean>> {
     public BlockListSetting(String name) {

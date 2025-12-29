@@ -2,7 +2,7 @@ package com.duox.advancedutilities.system.settings;
 
 import com.google.gson.JsonElement;
 
-/**
+/*
  * Base class for all settings.
  * Provides serialization/deserialization logic so ConfigManager doesn't need to know specific types.
  *

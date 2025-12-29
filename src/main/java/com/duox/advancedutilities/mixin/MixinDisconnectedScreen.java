@@ -1,5 +1,7 @@
 package com.duox.advancedutilities.mixin;
-
+/*
+ * Mixin to hook into DisconnectedScreen to add Reconnect buttons
+ */
 import com.duox.advancedutilities.modules.AutoReconnect;
 import com.duox.advancedutilities.system.ConnectionManager;
 import com.duox.advancedutilities.system.ModuleManager;

@@ -16,7 +16,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
+/*
  * Manages configuration loading and saving for the Advanced Utilities mod.
  * Uses a singleton pattern to ensure consistent access throughout the mod.
  */

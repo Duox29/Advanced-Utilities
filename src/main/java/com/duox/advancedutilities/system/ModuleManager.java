@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
+/*
  * Manages all modules in the mod.
  * Handles registration, lookup, and tick processing for modules.
  */

@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
+/*
  * Base class for all modules in the Advanced Utilities mod.
  * Modules are the core functionality units that can be enabled/disabled and configured.
  */

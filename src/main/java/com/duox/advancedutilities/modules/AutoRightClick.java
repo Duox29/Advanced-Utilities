@@ -13,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
-/**
+/*
  * Automatically right-clicks blocks within range.
  * Supports configurable range, delay, and number of clicks per block.
  */

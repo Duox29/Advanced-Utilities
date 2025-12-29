@@ -1,5 +1,4 @@
 package com.duox.advancedutilities.gui.widgets;
-
 import com.duox.advancedutilities.system.BlockSelector;
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.BlockListSetting;

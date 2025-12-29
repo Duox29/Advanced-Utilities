@@ -3,7 +3,7 @@ package com.duox.advancedutilities.system.settings;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 
-/**
+/*
  * A setting that holds a boolean value.
  */
 public class BooleanSetting extends Setting<Boolean> {

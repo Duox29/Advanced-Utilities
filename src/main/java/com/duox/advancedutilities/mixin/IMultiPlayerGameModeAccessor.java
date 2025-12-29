@@ -1,5 +1,7 @@
 package com.duox.advancedutilities.mixin;
-
+/*
+ * Mixin to access MultiPlayerGameMode.destroyDelay
+ */
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;

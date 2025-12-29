@@ -1,5 +1,7 @@
 package com.duox.advancedutilities.gui.factory;
-
+/*
+ * Factory for creating widgets from settings.
+ */
 import com.duox.advancedutilities.gui.widgets.*;
 import com.duox.advancedutilities.system.settings.*;
 

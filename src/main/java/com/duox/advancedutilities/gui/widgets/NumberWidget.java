@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for configuring numeric settings.
+ * Renders as a slider.
+ */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.NumberSetting;
 import net.minecraft.client.gui.components.AbstractWidget;

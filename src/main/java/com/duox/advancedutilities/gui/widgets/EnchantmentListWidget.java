@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for managing an EnchantmentListSetting.
+ * Supports adding enchantments with min level and max price constraints.
+ */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.EnchantmentListSetting;
 import net.minecraft.client.Minecraft;
@@ -11,7 +14,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraftforge.registries.ForgeRegistries;

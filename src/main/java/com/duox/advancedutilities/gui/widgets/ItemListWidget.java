@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for managing an ItemListSetting.
+ * Supports adding/removing items.
+ */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.ItemListSetting;
 import net.minecraft.client.Minecraft;

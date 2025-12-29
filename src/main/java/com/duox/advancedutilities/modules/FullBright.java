@@ -6,7 +6,7 @@ import com.duox.advancedutilities.system.Module;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 
-/**
+/*
  * Provides full brightness by applying night vision effect.
  * The effect is continuously reapplied while the module is enabled.
  */

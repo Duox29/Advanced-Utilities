@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.system.settings;
-
+/*
+ * Setting that stores a map of EntityType -> Boolean.
+ * Used for entity filtering/whitelisting.
+ */
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;

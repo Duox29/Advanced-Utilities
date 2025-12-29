@@ -1,6 +1,6 @@
 package com.duox.advancedutilities.system;
 
-/**
+/*
  * Centralized constants for the Advanced Utilities mod.
  * This class contains all magic numbers and configuration values used throughout the mod.
  */

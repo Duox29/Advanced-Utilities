@@ -23,7 +23,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
+/*
  * Searches for specific blocks and entities in the world and renders them.
  * Uses async scanning for blocks to avoid blocking the main thread.
  */

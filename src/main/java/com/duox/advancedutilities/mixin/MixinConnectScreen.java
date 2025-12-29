@@ -1,5 +1,4 @@
 package com.duox.advancedutilities.mixin;
-
 import com.duox.advancedutilities.system.ConnectionManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;

@@ -1,10 +1,8 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.Finder;
-import com.duox.advancedutilities.system.Constants;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -15,7 +13,7 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-/**
+/*
  * Handles rendering for modules that need world rendering.
  * Currently supports the Finder module for rendering found blocks and entities.
  */
@@ -108,7 +106,7 @@ public class ModuleRenderer {
         poseStack.popPose();
     }
 
-    /**
+    /*
      * Helper method to add a filled box to the vertex buffer.
      */
     private void addFilledBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {

@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for managing an EntityListSetting.
+ * Supports adding/removing entity types.
+ */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.EntityListSetting;
 import net.minecraft.client.Minecraft;
@@ -32,7 +35,7 @@ public class EntityListWidget extends SettingWidget {
         this.setting = setting;
     }
 
-    /**
+    /*
      * Calculates the height required to display all items based on the grid layout logic.
      * This ensures the parent GUI knows the correct size BEFORE rendering.
      */

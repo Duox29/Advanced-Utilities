@@ -16,7 +16,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
+/*
  * Main GUI screen for the Advanced Utilities mod.
  * Displays modules organized by category and allows configuration of module settings.
  */

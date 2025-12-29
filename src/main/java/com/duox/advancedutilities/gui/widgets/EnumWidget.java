@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for configuring an enum setting.
+ * Renders as a button that cycles through enum values.
+ */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.EnumSetting;
 import net.minecraft.client.gui.components.AbstractWidget;

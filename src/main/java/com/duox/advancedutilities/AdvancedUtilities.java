@@ -15,7 +15,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
-/**
+/*
  * Main mod class for Advanced Utilities.
  * Initializes all systems and handles mod lifecycle events.
  */

@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.system.settings;
-
+/*
+ * Setting that stores a map of Enchantment -> Data (enabled, minLevel, maxPrice).
+ * Used for advanced enchantment filtering (e.g., in VillagerRoller).
+ */
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;

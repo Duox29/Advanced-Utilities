@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for configuring a boolean setting.
+ * Renders as a toggle button.
+ */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.BooleanSetting;
 import net.minecraft.client.gui.components.AbstractWidget;

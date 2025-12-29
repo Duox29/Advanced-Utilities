@@ -1,5 +1,8 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Base class for all setting widgets.
+ * Provides common methods for initialization and rendering.
+ */
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import java.util.function.Consumer;

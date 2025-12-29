@@ -1,9 +1,11 @@
 package com.duox.advancedutilities.gui.widgets;
-
+/*
+ * Widget for configuring keybinds.
+ * Supports keyboard and mouse inputs.
+ */
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
