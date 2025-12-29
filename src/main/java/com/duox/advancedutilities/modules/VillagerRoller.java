@@ -134,8 +134,7 @@ public class VillagerRoller extends Module {
             return;
         }
 
-        tickCounter++;
-        if (tickCounter < delay.getInt()) return;
+        // We handle tick delays internally per state if needed, to maximize speed.
         
         switch (currentState) {
             case IDLE:
@@ -146,48 +145,48 @@ public class VillagerRoller extends Module {
                  VillagerProfession profession = targetVillager.getVillagerData().getProfession();
                  if (profession == VillagerProfession.NONE) {
                      // Villager is unemployed, we need to place the block
-                     currentState = State.PLACE_BLOCK;
+                     setState(State.PLACE_BLOCK);
                  } else {
                      // Villager has profession, let's check trades
                      // But first, we need to open the GUI
-                     currentState = State.OPEN_GUI;
+                     setState(State.OPEN_GUI);
                  }
-                tickCounter = 0;
-                break;
+                 break;
 
             case PLACE_BLOCK:
                 // Check if block is already there
                 if (mc.level.getBlockState(jobBlockPos).getBlock() != jobBlock) {
                     if (placeBlock(jobBlockPos)) {
-                         currentState = State.WAIT_FOR_JOB;
-                         tickCounter = 0;
+                         setState(State.WAIT_FOR_JOB);
                     }
                 } else {
-                     currentState = State.WAIT_FOR_JOB;
-                     tickCounter = 0;
+                     setState(State.WAIT_FOR_JOB);
                 }
                 break;
 
             case WAIT_FOR_JOB:
                 // Wait until villager picks up job
                 if (targetVillager.getVillagerData().getProfession() != VillagerProfession.NONE) {
-                    currentState = State.OPEN_GUI;
-                    tickCounter = 0;
+                    setState(State.OPEN_GUI);
                 }
-                // TODO: Timeout if it takes too long?
+                // Optional: Timeout logic if needed, but for now we wait indefinitely or until user stops.
                 break;
 
             case OPEN_GUI:
                 // Interact to open GUI
                 if (mc.screen instanceof MerchantScreen) {
                     // GUI is already open
-                    currentState = State.CHECK_TRADES;
-                    tickCounter = 0;
+                    setState(State.CHECK_TRADES);
                 } else {
-                    if (mc.gameMode != null) {
-                        mc.gameMode.interact(mc.player, targetVillager, InteractionHand.MAIN_HAND);
+                    // Try to open GUI
+                    // Only interact occasionally to avoid packet spam, but initially try immediately
+                    if (tickCounter == 0 || tickCounter % 20 == 0) {
+                        if (mc.gameMode != null) {
+                            mc.gameMode.interact(mc.player, targetVillager, InteractionHand.MAIN_HAND);
+                            mc.player.swing(InteractionHand.MAIN_HAND);
+                        }
                     }
-                    tickCounter = 0; // Wait for packet roundtrip
+                    tickCounter++;
                 }
                 break;
 
@@ -197,8 +196,7 @@ public class VillagerRoller extends Module {
                     MerchantOffers offers = screen.getMenu().getOffers();
                     
                     if (offers.isEmpty()) {
-                        // Sometimes offers are empty initially?
-                        // Wait a bit more?
+                        // Wait a bit for offers to sync?
                         return; 
                     }
 
@@ -208,12 +206,18 @@ public class VillagerRoller extends Module {
                             mc.player.displayClientMessage(Component.literal("§aTarget Trade Found! Stopping."), false);
                         }
                         this.toggle(); // Disable module
+                        return; // Ensure we stop processing this tick
                     } else {
                         // Not found
-                        mc.player.closeContainer();
-                        currentState = State.BREAK_BLOCK;
-                        tickCounter = 0;
+                        if (mc.player != null) {
+                            mc.player.closeContainer();
+                        }
+                        mc.setScreen(null); // Force close client screen to allow mining immediately
+                        setState(State.BREAK_BLOCK);
                     }
+                } else {
+                    // GUI closed unexpectedly?
+                    setState(State.OPEN_GUI);
                 }
                 break;
 
@@ -228,23 +232,24 @@ public class VillagerRoller extends Module {
                       }
                       
                       if (mc.gameMode != null) {
-                          // Legit mining
+                          // Legit mining - must be called every tick
                           mc.gameMode.continueDestroyBlock(jobBlockPos, Direction.UP);
                           mc.player.swing(InteractionHand.MAIN_HAND);
                       }
-                      
-                      // Stay in BREAK_BLOCK until block is gone
-                      tickCounter = 0; 
                  } else {
                      // Block is broken (or different)
                      if (mc.gameMode != null) {
                          mc.gameMode.stopDestroyBlock(); // Ensure we stop breaking
                      }
-                     currentState = State.CHECK_VILLAGER;
-                     tickCounter = 0;
+                     setState(State.CHECK_VILLAGER);
                  }
                  break;
         }
+    }
+    
+    private void setState(State newState) {
+        this.currentState = newState;
+        this.tickCounter = 0;
     }
     
     private int findBestTool(BlockState state) {
@@ -287,6 +292,12 @@ public class VillagerRoller extends Module {
                     int level = entry.getValue();
                     int price = offer.getCostA().getCount(); // Main cost (Emeralds usually)
                     
+                    if (mc.player != null) {
+                         String logMsg = String.format("§7[Roller] Seen: %s %d | Price: %d", 
+                                ench.getFullname(level).getString(), level, price);
+                         mc.player.displayClientMessage(Component.literal(logMsg), false);
+                    }
+
                     if (wantedEnchantments.contains(ench)) {
                         EnchantmentData data = wantedEnchantments.getData(ench);
                         
