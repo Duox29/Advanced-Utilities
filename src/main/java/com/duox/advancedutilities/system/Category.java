@@ -11,5 +11,8 @@ public enum Category {
     /** Modules that affect world interaction */
     WORLD,
     /** Miscellaneous modules */
-    MISC
+    MISC,
+
+    /** Combat modules */
+    COMBAT
 }

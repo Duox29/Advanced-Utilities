@@ -40,7 +40,7 @@ public class KillAura extends Module {
     private int tickCounter = 0;
 
     public KillAura() {
-        super("Kill Aura", "Automatically attacks entities around you.", Category.PLAYER);
+        super("Kill Aura", "Automatically attacks entities around you.", Category.COMBAT);
         addSetting(range);
         addSetting(speed);
         addSetting(priority);
