@@ -28,6 +28,7 @@ public class ModuleManager {
         register(new AutoRightClick());
         register(new FastClick());
         register(new NoBreakDelay());
+        register(new KillAura());
 
         // Misc category modules
         register(new AutoReconnect());
