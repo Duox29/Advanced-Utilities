@@ -34,6 +34,7 @@ public class ModuleManager {
 
         // Render category modules
         register(new FullBright());
+        register(new Zoom());
         register(new Finder());
     }
 

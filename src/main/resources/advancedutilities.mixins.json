@@ -8,7 +8,8 @@
     "IMinecraftAccessor",
     "IMultiPlayerGameModeAccessor",
     "MixinConnectScreen",
-    "MixinDisconnectedScreen"
+    "MixinDisconnectedScreen",
+    "MixinGameRenderer"
   ],
   "injectors": {
     "defaultRequire": 1
