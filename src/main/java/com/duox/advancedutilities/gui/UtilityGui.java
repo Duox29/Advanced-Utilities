@@ -77,7 +77,9 @@ public class UtilityGui extends Screen {
 
         for (Setting<?> setting : module.getSettings()) {
             int height = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
-                    || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting) 
+                    || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting
+                    || setting instanceof com.duox.advancedutilities.system.settings.ItemListSetting
+                    || setting instanceof com.duox.advancedutilities.system.settings.EnchantmentListSetting) 
                     ? Constants.GUI_LIST_WIDGET_HEIGHT : 20;
 
             SettingWidget widget = com.duox.advancedutilities.gui.factory.WidgetFactory.create(setting, startX, startY, widgetWidth, height);

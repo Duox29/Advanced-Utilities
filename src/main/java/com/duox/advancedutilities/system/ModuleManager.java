@@ -30,6 +30,9 @@ public class ModuleManager {
         register(new NoBreakDelay());
         register(new KillAura());
 
+        // World category modules
+        register(new VillagerRoller());
+
         // Misc category modules
         register(new AutoReconnect());
 

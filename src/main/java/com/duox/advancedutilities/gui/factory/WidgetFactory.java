@@ -31,6 +31,8 @@ public class WidgetFactory {
 
         register(BlockListSetting.class, (s, x, y, w, h) -> new BlockListWidget(s, x, y, w, 55));
         register(EntityListSetting.class, (s, x, y, w, h) -> new EntityListWidget(s, x, y, w, 55));
+        register(ItemListSetting.class, (s, x, y, w, h) -> new ItemListWidget(s, x, y, w, 55));
+        register(EnchantmentListSetting.class, (s, x, y, w, h) -> new EnchantmentListWidget(s, x, y, w, 55));
     }
 
     public static <T extends Setting<?>> void register(Class<T> settingClass, WidgetProvider<T> provider) {
