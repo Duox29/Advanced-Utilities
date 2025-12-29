@@ -29,6 +29,8 @@ public class ModuleManager {
         register(new FastClick());
         register(new NoBreakDelay());
         register(new KillAura());
+        register(new AutoSprint());
+        register(new AutoEat());
 
         // World category modules
         register(new VillagerRoller());
