@@ -22,7 +22,7 @@ public class BooleanWidget extends SettingWidget {
                         Component.literal(setting.getName() + ": " + (setting.getValue() ? "ON" : "OFF")),
                         button -> {
                             setting.toggle();
-                            ConfigManager.save();
+                            ConfigManager.getInstance().save();
                             // Cập nhật text và màu sắc ngay lập tức
                             button.setMessage(Component.literal(setting.getName() + ": " + (setting.getValue() ? "ON" : "OFF")));
                             button.setFGColor(setting.getValue() ? 0x55FF55 : 0xAAAAAA);

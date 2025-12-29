@@ -22,7 +22,7 @@ public class EnumWidget extends SettingWidget {
                         Component.literal(setting.getName() + ": " + setting.getValue().name()),
                         button -> {
                             setting.next();
-                            ConfigManager.save();
+                            ConfigManager.getInstance().save();
                             button.setMessage(Component.literal(setting.getName() + ": " + setting.getValue().name()));
                         })
                 .bounds(x, y, width, height)

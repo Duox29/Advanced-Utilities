@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.modules;
 
 import com.duox.advancedutilities.system.Category;
+import com.duox.advancedutilities.system.Constants;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.EnumSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
@@ -8,23 +9,24 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * Automatically fishes using a fishing rod.
+ * Supports two modes: XP mode (waits for XP gain) and Normal mode (uses fixed delay).
+ */
 public class AutoFish extends Module {
 
-    // --- GUI SETTINGS ---
+    /**
+     * Fishing mode options.
+     */
     public enum FishMode {
         XP, NORMAL
     }
-    private final EnumSetting<FishMode> mode = new EnumSetting<>("Mode", FishMode.XP);
 
-    // Settings phụ
+    private final EnumSetting<FishMode> mode = new EnumSetting<>("Mode", FishMode.XP);
     private final NumberSetting recastDelay = new NumberSetting("Recast Delay", 20, 10, 100, 1);
     private final NumberSetting xpTimeout = new NumberSetting("XP Timeout", 60, 20, 200, 5);
 
-    // --- CONSTANTS ---
-    private static final int WATCHDOG_TIMEOUT_TICKS = 400; // 20s
-    private static final int MAX_FISHING_WAIT_TICKS = 600; // 30s
-
-    // --- STATE VARIABLES ---
+    // State variables
     private boolean isQueuedToRecast = false;
     private int recastTimer = 0;
     private float lastXpProgress = -1;
@@ -35,8 +37,6 @@ public class AutoFish extends Module {
 
     public AutoFish() {
         super("AutoFish", "Auto fish with toggleable XP Mode.", Category.PLAYER);
-
-        // Đăng ký Setting
         this.addSetting(mode);
         this.addSetting(recastDelay);
         this.addSetting(xpTimeout);
@@ -44,13 +44,12 @@ public class AutoFish extends Module {
 
     @Override
     public void onEnable() {
-        // Reset state
         idleTicksCounter = 0;
         isQueuedToRecast = false;
         recastTimer = 0;
         xpDelayTimer = 0;
 
-        // Snapshot XP hiện tại để tránh lỗi logic ngay khi bật
+        // Snapshot current XP to avoid logic errors when first enabled
         if (mc.player != null) {
             lastXpProgress = mc.player.experienceProgress;
             lastXpLevel = mc.player.experienceLevel;
@@ -62,10 +61,10 @@ public class AutoFish extends Module {
         if (mc.player == null || mc.level == null) return;
         var player = mc.player;
 
-        // --- Watchdog (AFK Protection) ---
+        // Watchdog (AFK Protection)
         if (player.fishing == null && !isQueuedToRecast) {
             idleTicksCounter++;
-            if (idleTicksCounter >= WATCHDOG_TIMEOUT_TICKS) {
+            if (idleTicksCounter >= Constants.AUTOFISH_WATCHDOG_TIMEOUT_TICKS) {
                 useRod();
                 idleTicksCounter = 0;
                 return;
@@ -74,13 +73,13 @@ public class AutoFish extends Module {
             idleTicksCounter = 0;
         }
 
-        // 1. Logic Recast
+        // Handle recast logic
         if (isQueuedToRecast) {
             handleRecastLogic();
             return;
         }
 
-        // 2. Logic Detect Bite
+        // Detect bite
         if (player.fishing != null) {
             checkForBite();
         }
@@ -88,9 +87,9 @@ public class AutoFish extends Module {
 
     private void checkForBite() {
         var bobber = mc.player.fishing;
-        if (bobber.tickCount < 60) return;
+        if (bobber.tickCount < Constants.AUTOFISH_MIN_BOBBER_AGE) return;
 
-        if (bobber.tickCount >= MAX_FISHING_WAIT_TICKS) {
+        if (bobber.tickCount >= Constants.AUTOFISH_MAX_WAIT_TICKS) {
             useRod();
             prepareRecast();
             return;
@@ -99,8 +98,8 @@ public class AutoFish extends Module {
         Vec3 motion = bobber.getDeltaMovement();
         boolean inWater = !mc.level.getFluidState(bobber.blockPosition()).isEmpty();
 
-        // Detect cá cắn (Motion Y < -0.05)
-        if (motion.y < -0.05 && inWater) {
+        // Detect bite (Motion Y < threshold)
+        if (motion.y < Constants.AUTOFISH_BITE_MOTION_THRESHOLD && inWater) {
             useRod();
             prepareRecast();
 
@@ -119,11 +118,10 @@ public class AutoFish extends Module {
     }
 
     private void handleRecastLogic() {
-        // Kiểm tra chế độ trực tiếp
         FishMode currentMode = mode.getValue();
 
         if (currentMode == FishMode.XP) {
-            // --- XP MODE (ON) ---
+            // XP Mode: Wait for XP gain before recasting
             if (xpDelayTimer > 0) {
                 xpDelayTimer--;
                 if (xpDelayTimer <= 0) {
@@ -138,12 +136,12 @@ public class AutoFish extends Module {
             if (xpChanged) {
                 lastXpProgress = player.experienceProgress;
                 lastXpLevel = player.experienceLevel;
-                xpDelayTimer = 20; // Delay nhẹ sau khi nhận XP
+                xpDelayTimer = Constants.AUTOFISH_XP_DELAY_TICKS;
             } else if (xpTimeoutCounter-- <= 0) {
                 finishRecast(); // Timeout -> Force recast
             }
         } else {
-            // --- NORMAL MODE (OFF) ---
+            // Normal Mode: Use fixed delay
             if (recastTimer-- <= 0) {
                 finishRecast();
             }

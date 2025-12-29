@@ -33,7 +33,7 @@ public class NumberWidget extends SettingWidget {
             @Override
             protected void applyValue() {
                 setting.setValue(this.getValue());
-                ConfigManager.save();
+                ConfigManager.getInstance().save();
             }
         };
         widgetConsumer.accept(slider);

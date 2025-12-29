@@ -62,7 +62,7 @@ public class BlockListWidget extends SettingWidget {
                 ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
                 if (rl != null && ForgeRegistries.BLOCKS.containsKey(rl)) {
                     setting.add(ForgeRegistries.BLOCKS.getValue(rl));
-                    ConfigManager.save();
+                    ConfigManager.getInstance().save();
                     idInput.setValue("");
                     if (onRefreshCallback != null) onRefreshCallback.run();
                 }
@@ -135,7 +135,7 @@ public class BlockListWidget extends SettingWidget {
                     setting.remove(block);
                     if (onRefreshCallback != null) onRefreshCallback.run(); // Refresh layout on remove
                 }
-                ConfigManager.save();
+                ConfigManager.getInstance().save();
                 return true;
             }
             currentX += ITEM_SIZE;

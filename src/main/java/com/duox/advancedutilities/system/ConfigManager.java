@@ -5,26 +5,60 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.minecraftforge.fml.loading.FMLPaths;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.io.*;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * Manages configuration loading and saving for the Advanced Utilities mod.
+ * Uses a singleton pattern to ensure consistent access throughout the mod.
+ */
 public class ConfigManager {
+    private static final Logger LOGGER = LogManager.getLogger();
+    private static final ConfigManager INSTANCE = new ConfigManager();
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("advancedutilities.json");
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Path configPath = FMLPaths.CONFIGDIR.get().resolve("advancedutilities.json");
 
-    public static void load() {
-        if (!Files.exists(CONFIG_PATH)) {
+    private ConfigManager() {
+        // Private constructor for singleton pattern
+    }
+
+    /**
+     * Gets the singleton instance of ConfigManager.
+     *
+     * @return The ConfigManager instance
+     */
+    public static ConfigManager getInstance() {
+        return INSTANCE;
+    }
+
+    /**
+     * Loads configuration from disk.
+     * If the config file doesn't exist, creates a new one with default values.
+     */
+    public void load() {
+        if (!Files.exists(configPath)) {
+            LOGGER.info("Config file not found, creating default configuration");
             save();
             return;
         }
 
-        try (Reader reader = new FileReader(CONFIG_PATH.toFile())) {
-            JsonObject json = GSON.fromJson(reader, JsonObject.class);
-            if (json == null) return;
+        try (Reader reader = new FileReader(configPath.toFile())) {
+            JsonObject json = gson.fromJson(reader, JsonObject.class);
+            if (json == null) {
+                LOGGER.warn("Config file is empty or invalid, using defaults");
+                return;
+            }
 
+            int loadedModules = 0;
             for (Module module : ModuleManager.INSTANCE.getModules()) {
                 if (json.has(module.getName())) {
                     JsonObject moduleJson = json.getAsJsonObject(module.getName());
@@ -35,25 +69,36 @@ public class ConfigManager {
 
                     if (moduleJson.has("settings")) {
                         JsonObject settingsJson = moduleJson.getAsJsonObject("settings");
-                        // POLYMORPHIC LOAD: No instanceof checks needed!
+                        int loadedSettings = 0;
                         for (Setting<?> setting : module.getSettings()) {
                             if (settingsJson.has(setting.getName())) {
                                 try {
                                     setting.load(settingsJson.get(setting.getName()));
+                                    loadedSettings++;
                                 } catch (Exception e) {
-                                    System.err.println("Failed to load setting: " + setting.getName());
+                                    LOGGER.error("Failed to load setting '{}' for module '{}': {}", 
+                                            setting.getName(), module.getName(), e.getMessage());
                                 }
                             }
                         }
+                        if (loadedSettings > 0) {
+                            LOGGER.debug("Loaded {} settings for module '{}'", loadedSettings, module.getName());
+                        }
                     }
+                    loadedModules++;
                 }
             }
+            LOGGER.info("Successfully loaded configuration for {} modules", loadedModules);
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to load configuration file: {}", e.getMessage(), e);
         }
     }
 
-    public static void save() {
+    /**
+     * Saves the current configuration to disk.
+     * Creates the config directory if it doesn't exist.
+     */
+    public void save() {
         JsonObject json = new JsonObject();
 
         for (Module module : ModuleManager.INSTANCE.getModules()) {
@@ -61,7 +106,6 @@ public class ConfigManager {
             moduleJson.addProperty("enabled", module.isEnabled());
 
             JsonObject settingsJson = new JsonObject();
-            // POLYMORPHIC SAVE
             for (Setting<?> setting : module.getSettings()) {
                 settingsJson.add(setting.getName(), setting.save());
             }
@@ -74,11 +118,12 @@ public class ConfigManager {
             if (!Files.exists(FMLPaths.CONFIGDIR.get())) {
                 Files.createDirectories(FMLPaths.CONFIGDIR.get());
             }
-            try (Writer writer = new FileWriter(CONFIG_PATH.toFile())) {
-                GSON.toJson(json, writer);
+            try (Writer writer = new FileWriter(configPath.toFile())) {
+                gson.toJson(json, writer);
             }
+            LOGGER.debug("Configuration saved successfully");
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to save configuration file: {}", e.getMessage(), e);
         }
     }
 }

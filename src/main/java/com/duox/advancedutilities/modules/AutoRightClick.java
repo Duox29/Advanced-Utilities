@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.modules;
 
 import com.duox.advancedutilities.system.Category;
+import com.duox.advancedutilities.system.Constants;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.BlockListSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
@@ -12,15 +13,18 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
+/**
+ * Automatically right-clicks blocks within range.
+ * Supports configurable range, delay, and number of clicks per block.
+ */
 public class AutoRightClick extends Module {
 
-    // --- SETTINGS ---
-    // Khai báo public để config dễ dàng, hoặc dùng getter
     public final NumberSetting range = new NumberSetting("Range", 4.0, 1.0, 6.0, 0.5);
     public final NumberSetting delay = new NumberSetting("Delay (Ticks)", 10.0, 1.0, 100.0, 1.0);
     public final NumberSetting clicks = new NumberSetting("Clicks/Block", 1.0, 1.0, 10.0, 1.0);
     public final BlockListSetting blocks = new BlockListSetting("Targets");
-    // Internal
+
+    // Internal state
     private int clickTickCounter = 0;
     private int mapClearTickCounter = 0;
     private int scanTickCounter = 0;
@@ -29,7 +33,6 @@ public class AutoRightClick extends Module {
 
     public AutoRightClick() {
         super("AutoRightClick", "Auto right clicks blocks.", Category.PLAYER);
-        // Đăng ký setting để GUI nhìn thấy
         addSetting(range);
         addSetting(delay);
         addSetting(clicks);
@@ -47,19 +50,18 @@ public class AutoRightClick extends Module {
         if (mc.player == null || mc.level == null) return;
 
         mapClearTickCounter++;
-        if (mapClearTickCounter >= 60) {
+        if (mapClearTickCounter >= Constants.AUTORIGHTCLICK_MAP_CLEAR_INTERVAL_TICKS) {
             clicksPerBlockMap.clear();
             mapClearTickCounter = 0;
         }
 
         scanTickCounter++;
-        if (scanTickCounter >= 20) {
+        if (scanTickCounter >= Constants.AUTORIGHTCLICK_SCAN_INTERVAL_TICKS) {
             performSpatialScan();
             scanTickCounter = 0;
         }
 
         clickTickCounter++;
-        // Lấy giá trị từ Setting
         if (clickTickCounter < delay.getInt()) {
             return;
         }
@@ -71,7 +73,7 @@ public class AutoRightClick extends Module {
     private void performSpatialScan() {
         cachedTargetPositions.clear();
         BlockPos playerPos = Objects.requireNonNull(mc.player).blockPosition();
-        int r = range.getInt(); // Lấy giá trị Range
+        int r = range.getInt();
 
         for (int x = -r; x <= r; x++) {
             for (int y = -r; y <= r; y++) {
@@ -79,7 +81,6 @@ public class AutoRightClick extends Module {
                     BlockPos targetPos = playerPos.offset(x, y, z);
                     BlockState state = Objects.requireNonNull(mc.level).getBlockState(targetPos);
 
-                    // Logic check Block
                     if (blocks.contains(state.getBlock())) {
                         cachedTargetPositions.add(targetPos);
                     }
@@ -99,7 +100,6 @@ public class AutoRightClick extends Module {
         }
     }
 
-    // ... clickBlock giữ nguyên ...
     private void clickBlock(BlockPos pos) {
         if (mc.gameMode != null && mc.player != null) {
             BlockHitResult hitResult = new BlockHitResult(new Vec3(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5), net.minecraft.core.Direction.UP, pos, false);

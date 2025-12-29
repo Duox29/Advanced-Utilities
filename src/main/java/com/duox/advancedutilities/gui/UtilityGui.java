@@ -2,6 +2,7 @@ package com.duox.advancedutilities.gui;
 
 import com.duox.advancedutilities.gui.widgets.*;
 import com.duox.advancedutilities.system.*;
+import com.duox.advancedutilities.system.Constants;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.*;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,14 +16,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Main GUI screen for the Advanced Utilities mod.
+ * Displays modules organized by category and allows configuration of module settings.
+ */
 public class UtilityGui extends Screen {
 
-    // ... (Constants and State fields remain unchanged) ...
-    private static final int TOP_BAR_HEIGHT = 30;
-    private static final int SIDEBAR_WIDTH = 120;
-    private static final int MODULE_BTN_HEIGHT = 22;
-    private static final int MODULE_BTN_WIDTH = 100;
-    private static final int PADDING = 5;
+    private static final int TOP_BAR_HEIGHT = Constants.GUI_TOP_BAR_HEIGHT;
+    private static final int SIDEBAR_WIDTH = Constants.GUI_SIDEBAR_WIDTH;
+    private static final int MODULE_BTN_HEIGHT = Constants.GUI_MODULE_BTN_HEIGHT;
+    private static final int MODULE_BTN_WIDTH = Constants.GUI_MODULE_BTN_WIDTH;
+    private static final int PADDING = Constants.GUI_PADDING;
 
     private int currentTabIndex = 0;
     private final List<Category> categories = new ArrayList<>();
@@ -61,31 +65,30 @@ public class UtilityGui extends Screen {
         this.selectedModule = module;
         if (module == null) return;
 
-        int startX = SIDEBAR_WIDTH + 20;
-        int startY = TOP_BAR_HEIGHT + 40;
-        int widgetWidth = 200;
+        int startX = SIDEBAR_WIDTH + Constants.GUI_SETTINGS_START_X_OFFSET;
+        int startY = TOP_BAR_HEIGHT + Constants.GUI_SETTINGS_START_Y_OFFSET;
+        int widgetWidth = Constants.GUI_SETTINGS_WIDGET_WIDTH;
 
         for (Setting<?> setting : module.getSettings()) {
             int height = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
-                    || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting) ? 55 : 20;
+                    || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting) 
+                    ? Constants.GUI_LIST_WIDGET_HEIGHT : 20;
 
             SettingWidget widget = com.duox.advancedutilities.gui.factory.WidgetFactory.create(setting, startX, startY, widgetWidth, height);
 
             if (widget != null) {
-                // ARCHITECTURE FIX: Pass a callback that re-runs initSettingsPanel to refresh layout
+                // Pass a callback that re-runs initSettingsPanel to refresh layout
                 widget.init(w -> {
                     this.addRenderableWidget(w);
                     this.dynamicWidgets.add(w);
-                }, () -> this.initSettingsPanel(this.selectedModule)); // <--- The Fix
+                }, () -> this.initSettingsPanel(this.selectedModule));
 
                 this.customRenderWidgets.add(widget);
-                // Now widget.getHeight() returns the CORRECT expanded height because we updated the widgets logic
                 startY += widget.getHeight() + PADDING;
             }
         }
     }
 
-    // ... (Rest of the file remains unchanged: render, renderModuleList, mouseClicked, Helpers) ...
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(guiGraphics);
@@ -125,7 +128,6 @@ public class UtilityGui extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    // ... (Keep renderModuleList and mouseClicked and Helpers exactly as provided) ...
     private void renderModuleList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         List<Module> modulesToDisplay = (currentTabIndex == 0) ? activeModulesSnapshot : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
         int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2;
@@ -174,7 +176,7 @@ public class UtilityGui extends Screen {
             int btnY = TOP_BAR_HEIGHT + 10;
             for (Module mod : modulesToDisplay) {
                 if (isInside(mouseX, mouseY, btnX, btnY, MODULE_BTN_WIDTH, MODULE_BTN_HEIGHT)) {
-                    if (button == 0) { mod.toggle(); ConfigManager.save(); }
+                    if (button == 0) { mod.toggle(); ConfigManager.getInstance().save(); }
                     else if (button == 1 || mod == selectedModule) { initSettingsPanel(mod); }
                     return true;
                 }

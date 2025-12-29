@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.Finder;
+import com.duox.advancedutilities.system.Constants;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import net.minecraft.client.Minecraft;
@@ -14,6 +15,10 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+/**
+ * Handles rendering for modules that need world rendering.
+ * Currently supports the Finder module for rendering found blocks and entities.
+ */
 public class ModuleRenderer {
 
     private final ModuleManager moduleManager;
@@ -25,21 +30,21 @@ public class ModuleRenderer {
 
     @SubscribeEvent
     public void onRenderWorld(RenderLevelStageEvent event) {
-        // Render sau Translucent blocks
+        // Render after translucent blocks
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
 
-        Finder finder = (Finder) moduleManager.getModule(Finder.class);
+        Finder finder = moduleManager.getModule(Finder.class);
         if (finder != null && finder.isEnabled()) {
-            renderFinderDirect(event, finder);
+            renderFinder(event, finder);
         }
     }
 
     /**
-     * Kỹ thuật: Direct Rendering (Immediate Mode)
-     * Lý do: Bỏ qua hệ thống Batching của Minecraft để kiểm soát hoàn toàn RenderSystem.
-     * Đảm bảo: NO_DEPTH_TEST luôn hoạt động.
+     * Renders the Finder module's found blocks and entities.
+     * Uses direct rendering (immediate mode) to have full control over RenderSystem.
+     * Ensures NO_DEPTH_TEST is always active for proper rendering.
      */
-    private void renderFinderDirect(RenderLevelStageEvent event, Finder finder) {
+    private void renderFinder(RenderLevelStageEvent event, Finder finder) {
         PoseStack poseStack = event.getPoseStack();
         Vec3 cameraPos = event.getCamera().getPosition();
 
@@ -50,39 +55,36 @@ public class ModuleRenderer {
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
-        RenderSystem.disableDepthTest(); // [KEY LOGIC] Tắt kiểm tra độ sâu -> Nhìn xuyên tường
-        RenderSystem.depthMask(false);   // [KEY LOGIC] Không ghi vào Depth Buffer -> Không che khuất vật khác
-        RenderSystem.disableCull();      // Vẽ cả 2 mặt của khối
+        RenderSystem.disableDepthTest(); // Disable depth test -> see through walls
+        RenderSystem.depthMask(false);   // Don't write to depth buffer -> don't occlude other objects
+        RenderSystem.disableCull();      // Render both sides of blocks
 
-        // Đặt Shader trực tiếp
+        // Set shader directly
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
-        // 2. Lấy Tesselator (Công cụ vẽ trực tiếp)
+        // Get Tesselator (direct rendering tool)
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder buffer = tesselator.getBuilder();
 
-        // --- PHASE 1: RENDER BLOCKS (QUADS) ---
-        // Bắt đầu vẽ QUADS (Khối đặc)
+        // Phase 1: Render blocks (quads)
         buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
-        float rB = 1.0f, gB = 0.8f, bB = 0.2f, aB = 0.4f; // Vàng Cam, Trong suốt
-        var blocks = finder.getFoundBlocks(); // Lấy list snapshot an toàn
+        float rB = 1.0f, gB = 0.8f, bB = 0.2f, aB = Constants.RENDER_BLOCK_ALPHA; // Orange-yellow, transparent
+        var blocks = finder.getFoundBlocks(); // Get thread-safe snapshot
 
         for (BlockPos pos : blocks) {
             addFilledBoxToBuffer(poseStack, buffer, new AABB(pos), rB, gB, bB, aB);
         }
 
-        // Vẽ ngay lập tức!
         tesselator.end();
 
-        // --- PHASE 2: RENDER ENTITIES (LINES) ---
-        // Đặt lại Shader cho Lines (nếu cần đổi shader, nhưng PositionColor dùng chung được)
+        // Phase 2: Render entities (lines)
         RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
-        RenderSystem.lineWidth(2.0f); // Độ dày nét vẽ
+        RenderSystem.lineWidth(Constants.RENDER_LINE_WIDTH);
 
-        buffer.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL); // Thay đổi mode sang LINES
+        buffer.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
 
-        float rE = 1.0f, gE = 0.2f, bE = 0.2f, aE = 1.0f; // Đỏ
+        float rE = 1.0f, gE = 0.2f, bE = 0.2f, aE = Constants.RENDER_ENTITY_ALPHA; // Red
         var entities = finder.getFoundEntities();
 
         for (Entity entity : entities) {
@@ -96,17 +98,19 @@ public class ModuleRenderer {
 
         tesselator.end();
 
-        // 3. Khôi phục trạng thái (Cleanup)
+        // Restore state (cleanup)
         RenderSystem.enableDepthTest();
         RenderSystem.depthMask(true);
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
-        RenderSystem.lineWidth(1.0f);
+        RenderSystem.lineWidth(Constants.RENDER_DEFAULT_LINE_WIDTH);
 
         poseStack.popPose();
     }
 
-    // Hàm helper đẩy vertex vào buffer (đã xóa .endVertex() thừa vì Tesselator xử lý)
+    /**
+     * Helper method to add a filled box to the vertex buffer.
+     */
     private void addFilledBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {
         float minX = (float) box.minX;
         float minY = (float) box.minY;

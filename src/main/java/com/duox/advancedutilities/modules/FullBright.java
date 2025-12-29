@@ -1,10 +1,15 @@
 package com.duox.advancedutilities.modules;
 
 import com.duox.advancedutilities.system.Category;
+import com.duox.advancedutilities.system.Constants;
 import com.duox.advancedutilities.system.Module;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 
+/**
+ * Provides full brightness by applying night vision effect.
+ * The effect is continuously reapplied while the module is enabled.
+ */
 public class FullBright extends Module {
 
     public FullBright() {
@@ -13,7 +18,7 @@ public class FullBright extends Module {
 
     @Override
     public void onEnable() {
-        // Không cần làm gì khi enable, logic sẽ chạy trong onTick
+        // Logic runs in onTick
     }
 
     @Override
@@ -27,8 +32,9 @@ public class FullBright extends Module {
     public void onTick() {
         if (mc.player == null) return;
 
-        // Apply Night Vision liên tục (Duration thấp để không bị hiện icon quá lâu nếu tắt mod)
-        // false, false: Ẩn các hạt potion (particles) và ẩn icon trên màn hình
-        mc.player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 400, 0, false, false));
+        // Apply Night Vision continuously
+        // Parameters: duration, amplifier, ambient, showParticles, showIcon
+        mc.player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 
+                Constants.FULLBRIGHT_NIGHT_VISION_DURATION, 0, false, false));
     }
 }

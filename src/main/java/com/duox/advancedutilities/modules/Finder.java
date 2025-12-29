@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.modules;
 
 import com.duox.advancedutilities.system.Category;
+import com.duox.advancedutilities.system.Constants;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.BlockListSetting;
 import com.duox.advancedutilities.system.settings.BooleanSetting;
@@ -18,22 +19,24 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Searches for specific blocks and entities in the world and renders them.
+ * Uses async scanning for blocks to avoid blocking the main thread.
+ */
 public class Finder extends Module {
 
-    // --- Settings ---
     private final BooleanSetting searchBlocks = new BooleanSetting("Search Blocks", true);
     private final BooleanSetting searchEntities = new BooleanSetting("Search Entities", true);
-
-    // Range: 64 blocks radius is sufficient usually.
-    private final NumberSetting range = new NumberSetting("Range", 64, 16, 256, 16);
-    private final NumberSetting limit = new NumberSetting("Max Results", 1000, 10, 5000, 10);
+    private final NumberSetting range = new NumberSetting("Range", Constants.FINDER_DEFAULT_RANGE, 
+            Constants.FINDER_MIN_RANGE, Constants.FINDER_MAX_RANGE, 16);
+    private final NumberSetting limit = new NumberSetting("Max Results", Constants.FINDER_DEFAULT_LIMIT, 
+            Constants.FINDER_MIN_LIMIT, Constants.FINDER_MAX_LIMIT, 10);
 
     private final BlockListSetting blockList = new BlockListSetting("Blocks");
     private final EntityListSetting entityList = new EntityListSetting("Entities");
 
-    // --- State Management ---
-    // Sử dụng volatile để đảm bảo Visibility giữa các luồng.
-    // Chúng ta sẽ thay thế hoàn toàn List này mỗi lần scan xong (Immutable pattern cho render thread).
+    // State management - using volatile for thread-safe visibility
+    // Lists are completely replaced after each scan (immutable pattern for render thread)
     private volatile List<BlockPos> foundBlocks = Collections.emptyList();
     private volatile List<Entity> foundEntities = Collections.emptyList();
 
@@ -52,7 +55,7 @@ public class Finder extends Module {
 
     @Override
     public void onEnable() {
-        tickCounter = 100; // Force scan immediately on enable
+        tickCounter = Constants.FINDER_SCAN_INTERVAL_TICKS; // Force scan immediately on enable
     }
 
     @Override
@@ -66,8 +69,8 @@ public class Finder extends Module {
     public void onTick() {
         if (mc.player == null || mc.level == null) return;
 
-        // OPTIMIZATION: Chỉ quét mỗi 5 giây (20 ticks * 5 = 100)
-        if (tickCounter++ >= 100) {
+        // Optimization: Only scan every 5 seconds
+        if (tickCounter++ >= Constants.FINDER_SCAN_INTERVAL_TICKS) {
             scanNow();
             tickCounter = 0;
         }
@@ -97,7 +100,7 @@ public class Finder extends Module {
         List<Entity> results = new ArrayList<>();
         int max = limit.getInt();
 
-        // Lấy danh sách entities an toàn trên main thread
+        // Get entity list safely on main thread
         List<Entity> allEntities = mc.level.getEntities(mc.player, area);
 
         for (Entity entity : allEntities) {
@@ -112,10 +115,10 @@ public class Finder extends Module {
 
     private void scanBlocksAsync() {
         if (mc.player == null || mc.level == null) return;
-        // Nếu đang scan dở thì bỏ qua, đợi lần sau (tránh spam thread pool)
+        // Skip if already scanning (avoid spamming thread pool)
         if (isScanningBlocks.get()) return;
 
-        // Snapshot data cần thiết từ Main Thread để mang sang Async Thread
+        // Snapshot necessary data from main thread for async thread
         BlockPos playerPos = mc.player.blockPosition();
         net.minecraft.world.level.ChunkPos playerChunkPos = mc.player.chunkPosition();
         int radiusChunks = range.getInt() / 16;
@@ -145,7 +148,7 @@ public class Finder extends Module {
                     }
                 }
 
-                // Sorting chunks by distance helps finding closest blocks first
+                // Sort chunks by distance to find closest blocks first
                 chunksToScan.sort(Comparator.comparingInt(c ->
                         Math.abs(c.x - playerChunkPos.x) + Math.abs(c.z - playerChunkPos.z)
                 ));
@@ -153,10 +156,8 @@ public class Finder extends Module {
                 for (net.minecraft.world.level.ChunkPos chunkPos : chunksToScan) {
                     if (results.size() >= maxResult) break;
 
-                    // Note: Accessing chunks async needs care.
-                    // In simple mods, reading getChunk usually works if chunk is loaded,
-                    // but deep engine access might require synchronized checks.
-                    // Assuming mc.level.getChunk is safe enough for read-only block state access here.
+                    // Note: Accessing chunks async requires care.
+                    // Reading getChunk usually works if chunk is loaded for read-only block state access.
                     if (mc.level.hasChunkAt(chunkPos.x, chunkPos.z)) {
                         net.minecraft.world.level.chunk.LevelChunk chunk = mc.level.getChunk(chunkPos.x, chunkPos.z);
 

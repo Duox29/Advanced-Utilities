@@ -71,7 +71,7 @@ public class EntityListWidget extends SettingWidget {
                     ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
                     if (rl != null && ForgeRegistries.ENTITY_TYPES.containsKey(rl)) {
                         setting.add(ForgeRegistries.ENTITY_TYPES.getValue(rl));
-                        ConfigManager.save();
+                        ConfigManager.getInstance().save();
                         idInput.setValue("");
                         if (onRefreshCallback != null) onRefreshCallback.run(); // Trigger layout update
                     }
@@ -144,7 +144,7 @@ public class EntityListWidget extends SettingWidget {
                     // Removing an item changes height, so we must refresh layout
                     if (onRefreshCallback != null) onRefreshCallback.run();
                 }
-                ConfigManager.save();
+                ConfigManager.getInstance().save();
                 return true;
             }
             currentX += ITEM_SIZE;

@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.*;
+import net.minecraft.client.Minecraft;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -11,6 +12,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Manages all modules in the mod.
+ * Handles registration, lookup, and tick processing for modules.
+ */
 public class ModuleManager {
     public static final ModuleManager INSTANCE = new ModuleManager();
 
@@ -18,62 +23,92 @@ public class ModuleManager {
     private final Map<Class<? extends Module>, Module> moduleMap = new LinkedHashMap<>();
 
     private ModuleManager() {
-
-
-        // Player
+        // Player category modules
         register(new AutoFish());
         register(new AutoRightClick());
         register(new FastClick());
         register(new NoBreakDelay());
 
-        // Misc
+        // Misc category modules
         register(new AutoReconnect());
 
-        //Render
+        // Render category modules
         register(new FullBright());
         register(new Finder());
     }
 
     /**
      * Registers a module instance.
-     * Call this from your Main class registration phase.
+     *
+     * @param module The module to register
      */
     public void register(Module module) {
         moduleMap.put(module.getClass(), module);
     }
 
+    /**
+     * Gets a module by its class.
+     *
+     * @param clazz The class of the module to retrieve
+     * @param <T> The type of module
+     * @return The module instance, or null if not found
+     */
     @SuppressWarnings("unchecked")
     public <T extends Module> T getModule(Class<T> clazz) {
         return (T) moduleMap.get(clazz);
     }
 
+    /**
+     * Gets all registered modules.
+     *
+     * @return A list of all modules
+     */
     public List<Module> getModules() {
         return new ArrayList<>(moduleMap.values());
     }
 
+    /**
+     * Sets the enabled state of a module and saves the configuration.
+     *
+     * @param module The module to modify
+     * @param state The new enabled state
+     */
     public void setModuleState(Module module, boolean state) {
         module.setEnabled(state);
-        ConfigManager.save();
+        ConfigManager.getInstance().save();
     }
 
+    /**
+     * Gets all modules in a specific category.
+     *
+     * @param category The category to filter by
+     * @return A list of modules in the specified category
+     */
     public List<Module> getModulesByCategory(Category category) {
         return moduleMap.values().stream()
                 .filter(module -> module.getCategory() == category)
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Handles client tick events and calls onTick() for all enabled modules.
+     */
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
+        if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
             moduleMap.values().stream()
                     .filter(Module::isEnabled)
                     .forEach(Module::onTick);
         }
     }
 
+    /**
+     * Initializes the module manager.
+     * Registers event handlers and loads configuration.
+     */
     public void init() {
         MinecraftForge.EVENT_BUS.register(this);
         // Note: Load config AFTER modules are registered externally
-        ConfigManager.load();
+        ConfigManager.getInstance().load();
     }
 }

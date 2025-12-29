@@ -2,13 +2,11 @@ package com.duox.advancedutilities;
 
 import com.duox.advancedutilities.gui.UtilityGui;
 import com.duox.advancedutilities.system.*;
-import com.duox.advancedutilities.system.Module;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -16,6 +14,10 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.lwjgl.glfw.GLFW;
 
+/**
+ * Main mod class for Advanced Utilities.
+ * Initializes all systems and handles mod lifecycle events.
+ */
 @Mod("advancedutilities")
 public class AdvancedUtilities {
 
@@ -25,46 +27,52 @@ public class AdvancedUtilities {
             "Advanced Utilities"
     );
 
-    // [FIX] Constructor Injection: The modern way to get the Event Bus.
-    // This replaces the deprecated FMLJavaModLoadingContext.get()
+    /**
+     * Constructs the mod instance and registers event handlers.
+     *
+     * @param context The mod loading context
+     */
     public AdvancedUtilities(FMLJavaModLoadingContext context) {
         IEventBus modEventBus = context.getModEventBus();
 
-        // Register Mod Lifecycle Events
+        // Register mod lifecycle events
         modEventBus.addListener(this::clientSetup);
         modEventBus.addListener(this::registerKeys);
 
-        // Register Game Events (Tick, Input, etc.)
+        // Register game events (tick, input, etc.)
         MinecraftForge.EVENT_BUS.register(this);
 
-        // Initialize Systems
+        // Initialize systems
         BlockSelector.INSTANCE.init();
     }
 
+    /**
+     * Called during client setup phase.
+     * Initializes modules, loads configuration, and sets up rendering.
+     */
     private void clientSetup(final FMLClientSetupEvent event) {
         ModuleManager.INSTANCE.init();
-        ConfigManager.load();
+        ConfigManager.getInstance().load();
         new ModuleRenderer(ModuleManager.INSTANCE);
-
     }
 
+    /**
+     * Registers key mappings for the mod.
+     *
+     * @param event The key mapping registration event
+     */
     public void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(OPEN_GUI_KEY);
     }
 
+    /**
+     * Handles key input events.
+     * Opens the GUI when the configured key is pressed.
+     */
     @SubscribeEvent
     public void onKeyInput(InputEvent.Key event) {
         if (OPEN_GUI_KEY.consumeClick()) {
             Minecraft.getInstance().setScreen(new UtilityGui());
-        }
-    }
-
-    @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
-            ModuleManager.INSTANCE.getModules().stream()
-                    .filter(Module::isEnabled)
-                    .forEach(Module::onTick);
         }
     }
 }
