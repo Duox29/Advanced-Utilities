@@ -9,13 +9,17 @@ import com.duox.advancedutilities.system.settings.EntityListSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.AABB;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -25,21 +29,31 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Finder extends Module {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(Finder.class);
+
     private final BooleanSetting searchBlocks = new BooleanSetting("Search Blocks", true);
     private final BooleanSetting searchEntities = new BooleanSetting("Search Entities", true);
-    private final NumberSetting range = new NumberSetting("Range", Constants.FINDER_DEFAULT_RANGE, 
+    private final NumberSetting range = new NumberSetting("Range", Constants.FINDER_DEFAULT_RANGE,
             Constants.FINDER_MIN_RANGE, Constants.FINDER_MAX_RANGE, 16);
-    private final NumberSetting limit = new NumberSetting("Max Results", Constants.FINDER_DEFAULT_LIMIT, 
+    private final NumberSetting limit = new NumberSetting("Max Results", Constants.FINDER_DEFAULT_LIMIT,
             Constants.FINDER_MIN_LIMIT, Constants.FINDER_MAX_LIMIT, 10);
+    
+    // New Settings
+    private final NumberSetting chunksPerScan = new NumberSetting("Chunks Per Scan", 8, 1, 32, 1);
+    private final NumberSetting movementThreshold = new NumberSetting("Movement Threshold", 8, 0, 64, 1);
 
     private final BlockListSetting blockList = new BlockListSetting("Blocks");
     private final EntityListSetting entityList = new EntityListSetting("Entities");
 
-    // State management - using volatile for thread-safe visibility
-    // Lists are completely replaced after each scan (immutable pattern for render thread)
+    // State management
     private volatile List<BlockPos> foundBlocks = Collections.emptyList();
     private volatile List<Entity> foundEntities = Collections.emptyList();
 
+    // Internal state for incremental scanning
+    private final List<BlockPos> accumulatedBlocks = new ArrayList<>();
+    private final List<ChunkPos> pendingChunks = new ArrayList<>();
+    private BlockPos lastScanPos = null;
+    
     private final AtomicBoolean isScanningBlocks = new AtomicBoolean(false);
     private int tickCounter = 0;
 
@@ -51,123 +65,159 @@ public class Finder extends Module {
         this.addSetting(entityList);
         this.addSetting(range);
         this.addSetting(limit);
+        this.addSetting(chunksPerScan);
+        this.addSetting(movementThreshold);
     }
 
     @Override
     public void onEnable() {
-        tickCounter = Constants.FINDER_SCAN_INTERVAL_TICKS; // Force scan immediately on enable
+        resetScanState();
+        tickCounter = Constants.FINDER_SCAN_INTERVAL_TICKS; // Force initial check
     }
 
     @Override
     public void onDisable() {
         foundBlocks = Collections.emptyList();
         foundEntities = Collections.emptyList();
+        resetScanState();
+    }
+
+    private void resetScanState() {
         isScanningBlocks.set(false);
+        pendingChunks.clear();
+        accumulatedBlocks.clear();
+        lastScanPos = null;
     }
 
     @Override
     public void onTick() {
         if (mc.player == null || mc.level == null) return;
 
-        // Optimization: Only scan every 5 seconds
+        // Entity scanning (fast, keep on main thread but maybe check interval)
         if (tickCounter++ >= Constants.FINDER_SCAN_INTERVAL_TICKS) {
-            scanNow();
+            if (searchEntities.getValue()) {
+                scanEntities();
+            } else {
+                foundEntities = Collections.emptyList();
+            }
             tickCounter = 0;
         }
-    }
 
-    private void scanNow() {
-        // Entity scan is fast enough to run on main thread periodically
-        if (searchEntities.getValue()) {
-            scanEntities();
-        } else {
-            foundEntities = Collections.emptyList();
-        }
-
-        // Block scan is heavy, run async
+        // Block scanning logic
         if (searchBlocks.getValue()) {
-            scanBlocksAsync();
+            handleBlockScanning();
         } else {
-            foundBlocks = Collections.emptyList();
-        }
-    }
-
-    private void scanEntities() {
-        if (mc.level == null) return;
-        double r = range.getValue();
-        AABB area = mc.player.getBoundingBox().inflate(r);
-
-        List<Entity> results = new ArrayList<>();
-        int max = limit.getInt();
-
-        // Get entity list safely on main thread
-        List<Entity> allEntities = mc.level.getEntities(mc.player, area);
-
-        for (Entity entity : allEntities) {
-            if (results.size() >= max) break;
-            if (entityList.contains(entity.getType())) {
-                results.add(entity);
+            if (!foundBlocks.isEmpty()) {
+                foundBlocks = Collections.emptyList();
+                resetScanState();
             }
         }
-        // Atomic swap
-        this.foundEntities = results;
     }
 
-    private void scanBlocksAsync() {
-        if (mc.player == null || mc.level == null) return;
-        // Skip if already scanning (avoid spamming thread pool)
-        if (isScanningBlocks.get()) return;
-
-        // Snapshot necessary data from main thread for async thread
+    private void handleBlockScanning() {
         BlockPos playerPos = mc.player.blockPosition();
-        net.minecraft.world.level.ChunkPos playerChunkPos = mc.player.chunkPosition();
-        int radiusChunks = range.getInt() / 16;
-        int maxResult = limit.getInt();
 
-        List<net.minecraft.world.level.block.Block> targetBlocks = new ArrayList<>(blockList.getBlocks());
+        // Check for movement to restart scan
+        boolean shouldRestart = false;
+        if (lastScanPos == null) {
+            shouldRestart = true;
+        } else {
+            double distSq = lastScanPos.distSqr(playerPos);
+            double threshold = movementThreshold.getInt();
+            if (distSq > threshold * threshold) {
+                shouldRestart = true;
+            }
+        }
 
-        if (targetBlocks.isEmpty()) {
+        if (shouldRestart) {
+            // Cancel current scan logic if possible (we just clear pending)
+            pendingChunks.clear();
+            accumulatedBlocks.clear();
+            
+            // Populate pending chunks
+            int r = range.getInt();
+            int radiusChunks = r / 16;
+            ChunkPos playerChunkPos = mc.player.chunkPosition();
+            int minX = playerChunkPos.x - radiusChunks;
+            int maxX = playerChunkPos.x + radiusChunks;
+            int minZ = playerChunkPos.z - radiusChunks;
+            int maxZ = playerChunkPos.z + radiusChunks;
+
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    pendingChunks.add(new ChunkPos(x, z));
+                }
+            }
+
+            // Sort by distance from player
+            pendingChunks.sort(Comparator.comparingInt(c ->
+                    Math.abs(c.x - playerChunkPos.x) + Math.abs(c.z - playerChunkPos.z)
+            ));
+
+            lastScanPos = playerPos;
+            // Clear current results as we start over
             foundBlocks = Collections.emptyList();
+        }
+
+        // Process batch if we have chunks and not currently scanning
+        if (!pendingChunks.isEmpty() && !isScanningBlocks.get()) {
+            dispatchBatchScan();
+        }
+    }
+
+    private void dispatchBatchScan() {
+        if (mc.player == null || mc.level == null) return;
+        
+        // Capture the scan session ID (using lastScanPos as the token)
+        BlockPos scanSessionToken = this.lastScanPos;
+        
+        isScanningBlocks.set(true);
+        
+        // Take a batch of chunks
+        int batchSize = chunksPerScan.getInt();
+        List<ChunkPos> batch = new ArrayList<>();
+        while (batch.size() < batchSize && !pendingChunks.isEmpty()) {
+            batch.add(pendingChunks.remove(0));
+        }
+
+        // Snapshot data needed for async
+        BlockPos playerPos = mc.player.blockPosition();
+        Level level = mc.level; // Capture level
+        
+        int rangeVal = range.getInt();
+        long rangeSq = (long) rangeVal * rangeVal;
+        int maxResult = limit.getInt();
+        
+        // Use Set for O(1) lookup
+        Set<Block> targetBlocks = new HashSet<>(blockList.getBlocks());
+        
+        // Check current count safely
+        int currentCount;
+        synchronized (accumulatedBlocks) {
+            currentCount = accumulatedBlocks.size();
+        }
+        
+        if (targetBlocks.isEmpty() || currentCount >= maxResult) {
+            isScanningBlocks.set(false);
             return;
         }
 
-        isScanningBlocks.set(true);
-
         CompletableFuture.runAsync(() -> {
+            List<BlockPos> batchResults = new ArrayList<>();
             try {
-                List<BlockPos> results = new ArrayList<>();
-                int minX = playerChunkPos.x - radiusChunks;
-                int maxX = playerChunkPos.x + radiusChunks;
-                int minZ = playerChunkPos.z - radiusChunks;
-                int maxZ = playerChunkPos.z + radiusChunks;
+                for (ChunkPos chunkPos : batch) {
+                    if (currentCount + batchResults.size() >= maxResult) break;
 
-                List<net.minecraft.world.level.ChunkPos> chunksToScan = new ArrayList<>();
-                for (int x = minX; x <= maxX; x++) {
-                    for (int z = minZ; z <= maxZ; z++) {
-                        chunksToScan.add(new net.minecraft.world.level.ChunkPos(x, z));
-                    }
-                }
-
-                // Sort chunks by distance to find closest blocks first
-                chunksToScan.sort(Comparator.comparingInt(c ->
-                        Math.abs(c.x - playerChunkPos.x) + Math.abs(c.z - playerChunkPos.z)
-                ));
-
-                for (net.minecraft.world.level.ChunkPos chunkPos : chunksToScan) {
-                    if (results.size() >= maxResult) break;
-
-                    // Note: Accessing chunks async requires care.
-                    // Reading getChunk usually works if chunk is loaded for read-only block state access.
-                    if (mc.level.hasChunkAt(chunkPos.x, chunkPos.z)) {
-                        net.minecraft.world.level.chunk.LevelChunk chunk = mc.level.getChunk(chunkPos.x, chunkPos.z);
-
-                        net.minecraft.world.level.chunk.LevelChunkSection[] sections = chunk.getSections();
+                    if (level.hasChunkAt(chunkPos.x, chunkPos.z)) {
+                        LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
+                        
+                        LevelChunkSection[] sections = chunk.getSections();
                         for (int i = 0; i < sections.length; i++) {
-                            net.minecraft.world.level.chunk.LevelChunkSection section = sections[i];
+                            LevelChunkSection section = sections[i];
                             if (section == null || section.hasOnlyAir()) continue;
 
                             int bottomY = chunk.getSectionYFromSectionIndex(i) * 16;
-
+                            
                             for (int x = 0; x < 16; x++) {
                                 for (int y = 0; y < 16; y++) {
                                     for (int z = 0; z < 16; z++) {
@@ -176,11 +226,11 @@ public class Finder extends Module {
                                             int worldX = chunkPos.getMinBlockX() + x;
                                             int worldY = bottomY + y;
                                             int worldZ = chunkPos.getMinBlockZ() + z;
-
+                                            
                                             BlockPos pos = new BlockPos(worldX, worldY, worldZ);
-                                            // Quick distance check
-                                            if (playerPos.distSqr(pos) <= range.getInt() * range.getInt()) {
-                                                results.add(pos);
+                                            if (playerPos.distSqr(pos) <= rangeSq) {
+                                                batchResults.add(pos);
+                                                if (currentCount + batchResults.size() >= maxResult) return; 
                                             }
                                         }
                                     }
@@ -189,14 +239,45 @@ public class Finder extends Module {
                         }
                     }
                 }
-                // Atomic swap: Thread-safe update without locking render thread
-                this.foundBlocks = results;
+                
+                // Update results in thread-safe way
+                synchronized (accumulatedBlocks) {
+                    // Check if scan session is still valid
+                    if (Objects.equals(scanSessionToken, Finder.this.lastScanPos)) {
+                        accumulatedBlocks.addAll(batchResults);
+                        foundBlocks = new ArrayList<>(accumulatedBlocks);
+                    }
+                }
+                
             } catch (Exception e) {
-                e.printStackTrace();
+                LOGGER.error("Error in Finder async scan", e);
             } finally {
                 isScanningBlocks.set(false);
             }
         });
+    }
+
+    private void scanEntities() {
+        if (mc.level == null) return;
+        
+        double r = range.getValue();
+        AABB area = mc.player.getBoundingBox().inflate(r);
+
+        List<Entity> results = new ArrayList<>();
+        int max = limit.getInt();
+
+        List<Entity> allEntities = mc.level.getEntities(mc.player, area);
+
+        // Sort by distance
+        allEntities.sort(Comparator.comparingDouble(e -> e.distanceToSqr(mc.player)));
+
+        for (Entity entity : allEntities) {
+            if (results.size() >= max) break;
+            if (entityList.contains(entity.getType())) {
+                results.add(entity);
+            }
+        }
+        this.foundEntities = results;
     }
 
     public List<BlockPos> getFoundBlocks() {
