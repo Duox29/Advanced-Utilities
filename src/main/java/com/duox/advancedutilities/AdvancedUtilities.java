@@ -2,6 +2,7 @@ package com.duox.advancedutilities;
 
 import com.duox.advancedutilities.gui.UtilityGui;
 import com.duox.advancedutilities.system.*;
+import com.duox.advancedutilities.system.Module;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.InputEvent;
@@ -63,6 +64,10 @@ public class AdvancedUtilities {
      */
     public void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(OPEN_GUI_KEY);
+        // Register module keybinds
+        for (Module module : ModuleManager.INSTANCE.getModules()) {
+            event.register(module.getKeyMapping());
+        }
     }
 
     /**

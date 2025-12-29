@@ -69,6 +69,12 @@ public class UtilityGui extends Screen {
         int startY = TOP_BAR_HEIGHT + Constants.GUI_SETTINGS_START_Y_OFFSET;
         int widgetWidth = Constants.GUI_SETTINGS_WIDGET_WIDTH;
 
+        // Add Keybind Widget
+        KeybindWidget keybindWidget = new KeybindWidget(startX, startY, widgetWidth, 20, module.getKeyMapping());
+        this.addRenderableWidget(keybindWidget);
+        this.dynamicWidgets.add(keybindWidget);
+        startY += 20 + PADDING;
+
         for (Setting<?> setting : module.getSettings()) {
             int height = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
                     || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting) 

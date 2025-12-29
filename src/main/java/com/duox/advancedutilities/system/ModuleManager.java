@@ -96,6 +96,27 @@ public class ModuleManager {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
+            // Handle module keybinds
+            List<Module> toggledModules = new ArrayList<>();
+            for (Module module : moduleMap.values()) {
+                while (module.getKeyMapping().consumeClick()) {
+                    module.setEnabled(!module.isEnabled());
+                    toggledModules.add(module);
+                }
+            }
+
+            if (!toggledModules.isEmpty()) {
+                net.minecraft.network.chat.MutableComponent message = net.minecraft.network.chat.Component.empty();
+                for (int i = 0; i < toggledModules.size(); i++) {
+                    Module m = toggledModules.get(i);
+                    if (i > 0) message.append(net.minecraft.network.chat.Component.literal(", ").withStyle(net.minecraft.ChatFormatting.GRAY));
+                    
+                    message.append(net.minecraft.network.chat.Component.literal(m.getName())
+                            .withStyle(m.isEnabled() ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED));
+                }
+                Minecraft.getInstance().gui.setOverlayMessage(message, false);
+            }
+
             moduleMap.values().stream()
                     .filter(Module::isEnabled)
                     .forEach(Module::onTick);

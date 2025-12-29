@@ -1,6 +1,8 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.system.settings.Setting;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +17,7 @@ public abstract class Module {
     private final String description;
     private final Category category;
     private boolean enabled = false;
+    private final KeyMapping keyMapping;
 
     private final List<Setting<?>> settings = new ArrayList<>();
 
@@ -29,6 +32,12 @@ public abstract class Module {
         this.name = name;
         this.description = description;
         this.category = category;
+        this.keyMapping = new KeyMapping(
+                "key.advancedutilities.module." + name.toLowerCase().replaceAll(" ", "_"),
+                InputConstants.Type.KEYSYM,
+                InputConstants.UNKNOWN.getValue(),
+                "key.categories.advancedutilities"
+        );
     }
 
     /**
@@ -57,6 +66,14 @@ public abstract class Module {
         this.enabled = !this.enabled;
         if (this.enabled) onEnable();
         else onDisable();
+        
+        if (mc.player != null) {
+            net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.literal(this.name + " ")
+                    .withStyle(net.minecraft.ChatFormatting.WHITE)
+                    .append(net.minecraft.network.chat.Component.literal(this.enabled ? "Enabled" : "Disabled")
+                            .withStyle(this.enabled ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED));
+            mc.gui.setOverlayMessage(message, false);
+        }
     }
 
     /**
@@ -74,6 +91,7 @@ public abstract class Module {
     public String getName() { return name; }
     public String getDescription() { return description; }
     public Category getCategory() { return category; }
+    public KeyMapping getKeyMapping() { return keyMapping; }
 
     /**
      * Called when the module is enabled.
