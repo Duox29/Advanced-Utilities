@@ -100,9 +100,20 @@ public class ModuleManager {
             // Handle module keybinds
             List<Module> toggledModules = new ArrayList<>();
             for (Module module : moduleMap.values()) {
-                while (module.getKeyMapping().consumeClick()) {
-                    module.setEnabled(!module.isEnabled());
-                    toggledModules.add(module);
+                if (module.isHold()) {
+                    boolean isKeyDown = module.getKeyMapping().isDown();
+                    if (module.isEnabled() != isKeyDown) {
+                         module.setEnabled(isKeyDown);
+                         // Optional: Don't notify for hold modules to avoid spam
+                         // toggledModules.add(module);
+                    }
+                    // Consume click to prevent it from accumulating
+                    while (module.getKeyMapping().consumeClick()) {}
+                } else {
+                    while (module.getKeyMapping().consumeClick()) {
+                        module.setEnabled(!module.isEnabled());
+                        toggledModules.add(module);
+                    }
                 }
             }
 

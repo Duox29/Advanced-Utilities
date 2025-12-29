@@ -11,7 +11,7 @@ public class Zoom extends Module {
     private final NumberSetting zoomMultiplier;
 
     public Zoom() {
-        super("Zoom", "Adjusts the field of view.", Category.RENDER);
+        super("Zoom", "Adjusts the field of view.", Category.RENDER, true);
         
         zoomMultiplier = new NumberSetting("Multiplier", 4.0, 1.0, 50.0, 0.1);
         addSetting(zoomMultiplier);

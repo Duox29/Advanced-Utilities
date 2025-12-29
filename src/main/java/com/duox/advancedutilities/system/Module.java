@@ -28,6 +28,8 @@ public abstract class Module {
      * @param description A brief description of what the module does
      * @param category The category this module belongs to
      */
+    private boolean hold = false;
+
     public Module(String name, String description, Category category) {
         this.name = name;
         this.description = description;
@@ -39,6 +41,13 @@ public abstract class Module {
                 "key.categories.advancedutilities"
         );
     }
+
+    public Module(String name, String description, Category category, boolean hold) {
+        this(name, description, category);
+        this.hold = hold;
+    }
+
+    public boolean isHold() { return hold; }
 
     /**
      * Registers a setting with this module.
