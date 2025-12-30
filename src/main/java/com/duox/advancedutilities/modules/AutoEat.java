@@ -61,9 +61,9 @@ public class AutoEat extends Module {
 
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!stack.isEdible()) continue;
             
-            FoodProperties food = stack.getFoodProperties(mc.player);
+            // 1.21.1: Use Data Components for food
+            FoodProperties food = stack.get(net.minecraft.core.component.DataComponents.FOOD);
             if (food == null) continue;
 
             boolean isGap = stack.getItem() == Items.GOLDEN_APPLE || stack.getItem() == Items.ENCHANTED_GOLDEN_APPLE;
@@ -83,7 +83,7 @@ public class AutoEat extends Module {
                 }
             } else {
                 // Normal Food Logic
-                int nutrition = food.getNutrition();
+                int nutrition = food.nutrition(); // 1.21: getNutrition() -> nutrition() (record accessor)
                 
                 // Only eat if it doesn't overflow hunger bar
                 // (User requested: replace saturation check with hunger check)

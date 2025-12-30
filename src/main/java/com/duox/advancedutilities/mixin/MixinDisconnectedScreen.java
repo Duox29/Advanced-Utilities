@@ -105,7 +105,7 @@ public abstract class MixinDisconnectedScreen extends Screen {
     private void reconnect() {
         ServerData server = ConnectionManager.lastServer;
         if (server != null) {
-            ConnectScreen.startConnecting(new JoinMultiplayerScreen(new TitleScreen()), this.minecraft, ServerAddress.parseString(server.ip), server, false);
+            ConnectScreen.startConnecting(new JoinMultiplayerScreen(new TitleScreen()), this.minecraft, ServerAddress.parseString(server.ip), server, false, null);
         }
     }
 }

@@ -5,9 +5,9 @@ package com.duox.advancedutilities.system.settings;
  */
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
-import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.LinkedHashMap;
 
@@ -42,7 +42,7 @@ public class EntityListSetting extends Setting<LinkedHashMap<EntityType<?>, Bool
     public JsonElement save() {
         JsonObject map = new JsonObject();
         this.value.forEach((type, enabled) -> {
-            ResourceLocation key = ForgeRegistries.ENTITY_TYPES.getKey(type);
+            ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(type);
             if (key != null) map.addProperty(key.toString(), enabled);
         });
         return map;
@@ -58,8 +58,8 @@ public class EntityListSetting extends Setting<LinkedHashMap<EntityType<?>, Bool
         for (String key : obj.keySet()) {
             // Safe parsing to avoid crashes if config contains invalid IDs
             ResourceLocation rl = ResourceLocation.tryParse(key);
-            if (rl != null && ForgeRegistries.ENTITY_TYPES.containsKey(rl)) {
-                newMap.put(ForgeRegistries.ENTITY_TYPES.getValue(rl), obj.get(key).getAsBoolean());
+            if (rl != null && BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) {
+                newMap.put(BuiltInRegistries.ENTITY_TYPE.get(rl), obj.get(key).getAsBoolean());
             }
         }
         this.value = newMap;

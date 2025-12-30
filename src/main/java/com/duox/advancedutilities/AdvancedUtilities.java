@@ -5,14 +5,13 @@ import com.duox.advancedutilities.system.*;
 import com.duox.advancedutilities.system.Module;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraftforge.client.event.InputEvent;
-import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import org.lwjgl.glfw.GLFW;
 
 /*
@@ -31,17 +30,15 @@ public class AdvancedUtilities {
     /**
      * Constructs the mod instance and registers event handlers.
      *
-     * @param context The mod loading context
+     * @param modEventBus The mod event bus
      */
-    public AdvancedUtilities(FMLJavaModLoadingContext context) {
-        IEventBus modEventBus = context.getModEventBus();
-
+    public AdvancedUtilities(IEventBus modEventBus) {
         // Register mod lifecycle events
         modEventBus.addListener(this::clientSetup);
         modEventBus.addListener(this::registerKeys);
 
         // Register game events (tick, input, etc.)
-        MinecraftForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(this);
 
         // Initialize systems
         BlockSelector.INSTANCE.init();

@@ -10,17 +10,19 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
-import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.duox.advancedutilities.system.settings.EnchantmentListSetting.EnchantmentData;
@@ -78,24 +80,30 @@ public class EnchantmentListWidget extends SettingWidget {
             String val = idInput.getValue();
             if (val != null && !val.isEmpty()) {
                 try {
-                    ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
-                    if (rl != null && ForgeRegistries.ENCHANTMENTS.containsKey(rl)) {
-                        int lvl = 1;
-                        int price = 64;
-                        try { lvl = Integer.parseInt(levelInput.getValue()); } catch (Exception e) {}
-                        try { price = Integer.parseInt(priceInput.getValue()); } catch (Exception e) {}
+                    String id = val.contains(":") ? val : "minecraft:" + val;
+                    ResourceLocation rl = ResourceLocation.tryParse(id);
+                    
+                    if (rl != null && mc.level != null) {
+                        Optional<Holder.Reference<Enchantment>> optionalEnch = mc.level.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolder(rl);
                         
-                        setting.add(ForgeRegistries.ENCHANTMENTS.getValue(rl));
-                        // Update data
-                        EnchantmentData data = setting.getData(ForgeRegistries.ENCHANTMENTS.getValue(rl));
-                        if (data != null) {
-                            data.minLevel = lvl;
-                            data.maxPrice = price;
+                        if (optionalEnch.isPresent()) {
+                            int lvl = 1;
+                            int price = 64;
+                            try { lvl = Integer.parseInt(levelInput.getValue()); } catch (Exception e) {}
+                            try { price = Integer.parseInt(priceInput.getValue()); } catch (Exception e) {}
+                            
+                            setting.add(id);
+                            // Update data
+                            EnchantmentData data = setting.getData(id);
+                            if (data != null) {
+                                data.minLevel = lvl;
+                                data.maxPrice = price;
+                            }
+                            
+                            ConfigManager.getInstance().save();
+                            idInput.setValue("");
+                            if (onRefreshCallback != null) onRefreshCallback.run();
                         }
-                        
-                        ConfigManager.getInstance().save();
-                        idInput.setValue("");
-                        if (onRefreshCallback != null) onRefreshCallback.run();
                     }
                 } catch (Exception ignored) {}
             }
@@ -118,15 +126,25 @@ public class EnchantmentListWidget extends SettingWidget {
         int currentY = startY;
         int limitX = x + width - ITEM_SIZE;
 
-        for (Map.Entry<Enchantment, EnchantmentData> entry : setting.getValue().entrySet()) {
+        if (mc.level == null) return;
+
+        for (Map.Entry<String, EnchantmentData> entry : setting.getValue().entrySet()) {
             if (currentX > limitX) {
                 currentX = startX;
                 currentY += ITEM_SIZE;
             }
 
-            Enchantment enchant = entry.getKey();
+            String enchantId = entry.getKey();
             EnchantmentData data = entry.getValue();
             boolean enabled = data.enabled;
+            
+            ResourceLocation rl = ResourceLocation.tryParse(enchantId);
+            if (rl == null) continue;
+            
+            Optional<Holder.Reference<Enchantment>> optionalEnch = mc.level.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolder(rl);
+            if (optionalEnch.isEmpty()) continue;
+            Holder<Enchantment> enchantHolder = optionalEnch.get();
+            Enchantment enchant = enchantHolder.value();
 
             int bgColor = enabled ? 0x8000FF00 : 0x80FF0000;
             guiGraphics.fill(currentX, currentY, currentX + 16, currentY + 16, bgColor);
@@ -134,7 +152,7 @@ public class EnchantmentListWidget extends SettingWidget {
             if (mouseX >= currentX && mouseX <= currentX + 16 && mouseY >= currentY && mouseY <= currentY + 16) {
                 guiGraphics.renderOutline(currentX, currentY, 16, 16, 0xFFFFFFFF);
                 
-                String tooltip = enchant.getFullname(data.minLevel).getString() + 
+                String tooltip = Enchantment.getFullname(enchantHolder, data.minLevel).getString() + 
                         (enabled ? " [ON]" : " [OFF]") +
                         "\nMin Lvl: " + data.minLevel + 
                         "\nMax Price: " + data.maxPrice;
@@ -145,7 +163,7 @@ public class EnchantmentListWidget extends SettingWidget {
                 guiGraphics.renderComponentTooltip(mc.font, tooltips, mouseX, mouseY);
             }
 
-            ItemStack book = EnchantedBookItem.createForEnchantment(new EnchantmentInstance(enchant, data.minLevel));
+            ItemStack book = EnchantedBookItem.createForEnchantment(new EnchantmentInstance(enchantHolder, data.minLevel));
             guiGraphics.renderItem(book, currentX, currentY);
 
             currentX += ITEM_SIZE;
@@ -160,8 +178,8 @@ public class EnchantmentListWidget extends SettingWidget {
         int currentY = startY;
         int limitX = x + width - ITEM_SIZE;
 
-        List<Enchantment> keys = new ArrayList<>(setting.getValue().keySet());
-        for (Enchantment enchant : keys) {
+        List<String> keys = new ArrayList<>(setting.getValue().keySet());
+        for (String enchantId : keys) {
             if (currentX > limitX) {
                 currentX = startX;
                 currentY += ITEM_SIZE;
@@ -169,9 +187,9 @@ public class EnchantmentListWidget extends SettingWidget {
 
             if (mouseX >= currentX && mouseX <= currentX + 16 && mouseY >= currentY && mouseY <= currentY + 16) {
                 if (button == 0) {
-                    setting.toggle(enchant);
+                    setting.toggle(enchantId);
                 } else if (button == 1) {
-                    setting.remove(enchant);
+                    setting.remove(enchantId);
                     if (onRefreshCallback != null) onRefreshCallback.run();
                 }
                 ConfigManager.getInstance().save();

@@ -15,8 +15,8 @@ IF ERRORLEVEL 1 (
 echo Gradle build completed.
 
 REM ====== MOD PATHS ======
-set MODS_DIR=D:\GameBackup\PrismLauncher-Windows-MSVC-Portable-8.4\instances\1.20.1\.minecraft\mods
-set SRC_JAR=C:\Users\Duox\Documents\MC Modding\Base\build\libs\advancedutilities-1.0.0-all.jar
+set MODS_DIR=D:\GameBackup\PrismLauncher-Windows-MSVC-Portable-8.4\instances\1.21.1\.minecraft\mods
+set SRC_JAR=C:\Users\Duox\Documents\MC Modding\Base\build\libs\advancedutilities-1.0.0.jar
 
 REM ====== UPDATE MOD ======
 echo Deleting old mods...
@@ -35,7 +35,7 @@ echo Mod updated.
 
 REM ====== LAUNCH MINECRAFT ======
 cd /d D:\GameBackup\PrismLauncher-Windows-MSVC-Portable-8.4
-start "" PrismLauncher.exe -l "1.20.1"
+start "" PrismLauncher.exe -l "1.21.1"
 
 echo Done.
 exit

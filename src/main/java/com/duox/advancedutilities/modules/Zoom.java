@@ -3,9 +3,9 @@ package com.duox.advancedutilities.modules;
 import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.NumberSetting;
-import net.minecraftforge.client.event.ComputeFovModifierEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.ComputeFovModifierEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.SubscribeEvent;
 
 public class Zoom extends Module {
     private final NumberSetting zoomMultiplier;
@@ -19,12 +19,12 @@ public class Zoom extends Module {
 
     @Override
     public void onEnable() {
-        MinecraftForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(this);
     }
 
     @Override
     public void onDisable() {
-        MinecraftForge.EVENT_BUS.unregister(this);
+        NeoForge.EVENT_BUS.unregister(this);
     }
 
     public double getMultiplier() {

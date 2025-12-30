@@ -208,7 +208,7 @@ public class Finder extends Module {
                 for (ChunkPos chunkPos : batch) {
                     if (currentCount + batchResults.size() >= maxResult) break;
 
-                    if (level.hasChunkAt(chunkPos.x, chunkPos.z)) {
+                    if (level.hasChunk(chunkPos.x, chunkPos.z)) {
                         LevelChunk chunk = level.getChunk(chunkPos.x, chunkPos.z);
                         
                         LevelChunkSection[] sections = chunk.getSections();

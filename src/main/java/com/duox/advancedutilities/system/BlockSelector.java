@@ -5,9 +5,9 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.client.event.InputEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.SubscribeEvent;
 
 /*
  * Handles block selection for BlockListSetting.
@@ -23,7 +23,7 @@ public class BlockSelector {
      * Initializes the block selector and registers event handlers.
      */
     public void init() {
-        MinecraftForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(this);
     }
 
     /**

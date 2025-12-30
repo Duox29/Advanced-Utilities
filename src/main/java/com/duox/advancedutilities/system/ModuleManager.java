@@ -2,9 +2,9 @@ package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.*;
 import net.minecraft.client.Minecraft;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -101,8 +101,8 @@ public class ModuleManager {
      * Handles client tick events and calls onTick() for all enabled modules.
      */
     @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
+    public void onClientTick(ClientTickEvent.Post event) {
+        if (Minecraft.getInstance().player != null) {
             // Handle module keybinds
             List<Module> toggledModules = new ArrayList<>();
             for (Module module : moduleMap.values()) {
@@ -146,7 +146,7 @@ public class ModuleManager {
      * Registers event handlers and loads configuration.
      */
     public void init() {
-        MinecraftForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(this);
         // Note: Load config AFTER modules are registered externally
         ConfigManager.getInstance().load();
     }

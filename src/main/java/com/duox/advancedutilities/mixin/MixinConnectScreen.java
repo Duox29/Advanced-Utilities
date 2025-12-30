@@ -21,9 +21,9 @@ public class MixinConnectScreen {
         if (serverData != null) {
             ConnectionManager.lastServer = serverData;
         } else if (address != null) {
-            // [FIX] Sử dụng constructor (String name, String ip, boolean isLan) cho 1.20.1
+            // [FIX] Sử dụng constructor (String name, String ip, ServerData.Type type) cho 1.21
             System.out.println("[AdvancedUtilities] ServerData is null, creating from address...");
-            ConnectionManager.lastServer = new ServerData("Last Server", address.getHost() + ":" + address.getPort(), false);
+            ConnectionManager.lastServer = new ServerData("Last Server", address.getHost() + ":" + address.getPort(), ServerData.Type.OTHER);
         }
     }
 }

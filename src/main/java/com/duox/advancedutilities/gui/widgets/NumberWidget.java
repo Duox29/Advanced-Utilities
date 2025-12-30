@@ -5,9 +5,9 @@ package com.duox.advancedutilities.gui.widgets;
  */
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.NumberSetting;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.client.gui.widget.ForgeSlider;
 
 import java.util.function.Consumer;
 
@@ -21,21 +21,33 @@ public class NumberWidget extends SettingWidget {
 
     @Override
     public void init(Consumer<AbstractWidget> widgetConsumer, Runnable onRefresh) {
-        // ForgeSlider tự động xử lý việc kéo thả
-        ForgeSlider slider = new ForgeSlider(
+        double currentVal = (setting.getValue() - setting.getMin()) / (setting.getMax() - setting.getMin());
+        
+        AbstractSliderButton slider = new AbstractSliderButton(
                 x, y, width, height,
-                Component.literal(setting.getName() + ": "),
-                Component.empty(),
-                setting.getMin(),
-                setting.getMax(),
-                setting.getValue(),
-                setting.getIncrement(),
-                1,
-                true
+                Component.literal(setting.getName() + ": " + String.format("%.1f", setting.getValue())),
+                currentVal
         ) {
             @Override
+            protected void updateMessage() {
+                double val = this.value * (setting.getMax() - setting.getMin()) + setting.getMin();
+                // Snap to increment
+                double inc = setting.getIncrement();
+                if (inc > 0) {
+                    val = Math.round(val / inc) * inc;
+                }
+                this.setMessage(Component.literal(setting.getName() + ": " + String.format("%.1f", val)));
+            }
+
+            @Override
             protected void applyValue() {
-                setting.setValue(this.getValue());
+                double val = this.value * (setting.getMax() - setting.getMin()) + setting.getMin();
+                // Snap to increment
+                double inc = setting.getIncrement();
+                if (inc > 0) {
+                    val = Math.round(val / inc) * inc;
+                }
+                setting.setValue(val);
                 ConfigManager.getInstance().save();
             }
         };

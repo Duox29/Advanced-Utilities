@@ -9,9 +9,10 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.bus.api.SubscribeEvent;
+import org.joml.Matrix4f;
 
 /*
  * Handles rendering for modules that need world rendering.
@@ -23,7 +24,7 @@ public class ModuleRenderer {
 
     public ModuleRenderer(ModuleManager moduleManager) {
         this.moduleManager = moduleManager;
-        MinecraftForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(this);
     }
 
     @SubscribeEvent
@@ -62,10 +63,7 @@ public class ModuleRenderer {
 
         // Get Tesselator (direct rendering tool)
         Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buffer = tesselator.getBuilder();
-
-        // Phase 1: Render blocks (quads)
-        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
         float rB = 1.0f, gB = 0.8f, bB = 0.2f, aB = Constants.RENDER_BLOCK_ALPHA; // Orange-yellow, transparent
         var blocks = finder.getFoundBlocks(); // Get thread-safe snapshot
@@ -74,27 +72,27 @@ public class ModuleRenderer {
             addFilledBoxToBuffer(poseStack, buffer, new AABB(pos), rB, gB, bB, aB);
         }
 
-        tesselator.end();
+        BufferUploader.drawWithShader(buffer.buildOrThrow());
 
         // Phase 2: Render entities (lines)
         RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
         RenderSystem.lineWidth(Constants.RENDER_LINE_WIDTH);
 
-        buffer.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
+        buffer = tesselator.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
 
         float rE = 1.0f, gE = 0.2f, bE = 0.2f, aE = Constants.RENDER_ENTITY_ALPHA; // Red
         var entities = finder.getFoundEntities();
 
         for (Entity entity : entities) {
-            double x = Mth.lerp(event.getPartialTick(), entity.xo, entity.getX());
-            double y = Mth.lerp(event.getPartialTick(), entity.yo, entity.getY());
-            double z = Mth.lerp(event.getPartialTick(), entity.zo, entity.getZ());
+            double x = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.xo, entity.getX());
+            double y = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.yo, entity.getY());
+            double z = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.zo, entity.getZ());
 
             AABB box = entity.getType().getDimensions().makeBoundingBox(new Vec3(x, y, z));
             addLineBoxToBuffer(poseStack, buffer, box, rE, gE, bE, aE);
         }
 
-        tesselator.end();
+        BufferUploader.drawWithShader(buffer.buildOrThrow());
 
         // Restore state (cleanup)
         RenderSystem.enableDepthTest();
@@ -117,43 +115,43 @@ public class ModuleRenderer {
         float maxY = (float) box.maxY;
         float maxZ = (float) box.maxZ;
 
-        var matrix = stack.last().pose();
+        Matrix4f matrix = stack.last().pose();
 
         // Down
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
+        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a);
 
         // Up
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
+        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a);
 
         // North
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
+        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a);
 
         // South
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
+        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a);
 
         // West
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
+        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a);
 
         // East
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
+        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a);
+        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a);
     }
 
     private void addLineBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {
@@ -163,36 +161,36 @@ public class ModuleRenderer {
         float maxX = (float) box.maxX;
         float maxY = (float) box.maxY;
         float maxZ = (float) box.maxZ;
-        var matrix = stack.last().pose();
+        Matrix4f matrix = stack.last().pose();
 
         // Bottom
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
 
         // Top
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
 
         // Sides
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
+        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
+        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
     }
 }

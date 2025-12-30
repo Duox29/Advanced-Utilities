@@ -10,11 +10,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,8 +61,8 @@ public class ItemListWidget extends SettingWidget {
             if (val != null && !val.isEmpty()) {
                 try {
                     ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
-                    if (rl != null && ForgeRegistries.ITEMS.containsKey(rl)) {
-                        setting.add(ForgeRegistries.ITEMS.getValue(rl));
+                    if (rl != null && BuiltInRegistries.ITEM.containsKey(rl)) {
+                        setting.add(BuiltInRegistries.ITEM.get(rl));
                         ConfigManager.getInstance().save();
                         idInput.setValue("");
                         if (onRefreshCallback != null) onRefreshCallback.run();

@@ -9,6 +9,7 @@ import com.duox.advancedutilities.system.settings.NumberSetting;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.npc.Villager;
@@ -24,9 +25,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.bus.api.SubscribeEvent;
 
 import java.util.Map;
 
@@ -56,7 +57,7 @@ public class VillagerRoller extends Module {
 
     @Override
     public void onEnable() {
-        MinecraftForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.register(this);
         if (targetVillager == null || jobBlockPos == null) {
             startSelection();
         } else {
@@ -66,7 +67,7 @@ public class VillagerRoller extends Module {
 
     @Override
     public void onDisable() {
-        MinecraftForge.EVENT_BUS.unregister(this);
+        NeoForge.EVENT_BUS.unregister(this);
         currentState = State.IDLE;
         selectingVillager = false;
         selectingBlock = false;
@@ -286,26 +287,32 @@ public class VillagerRoller extends Module {
             
             // Check Enchantments
             if (result.getItem() == Items.ENCHANTED_BOOK) {
-                Map<Enchantment, Integer> enchants = EnchantmentHelper.getEnchantments(result);
-                for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
-                    Enchantment ench = entry.getKey();
-                    int level = entry.getValue();
+                var itemEnchantments = EnchantmentHelper.getEnchantmentsForCrafting(result);
+                
+                for (var entry : itemEnchantments.entrySet()) {
+                    Holder<Enchantment> enchHolder = entry.getKey();
+                    
+                    // Get ResourceLocation Key
+                    String key = enchHolder.unwrapKey().map(k -> k.location().toString()).orElse(null);
+                    if (key == null) continue;
+                    
+                    int level = entry.getIntValue();
                     int price = offer.getCostA().getCount(); // Main cost (Emeralds usually)
                     
                     if (mc.player != null) {
                          String logMsg = String.format("§7[Roller] Seen: %s %d | Price: %d", 
-                                ench.getFullname(level).getString(), level, price);
+                                Enchantment.getFullname(enchHolder, level).getString(), level, price);
                          mc.player.displayClientMessage(Component.literal(logMsg), false);
                     }
 
-                    if (wantedEnchantments.contains(ench)) {
-                        EnchantmentData data = wantedEnchantments.getData(ench);
+                    if (wantedEnchantments.contains(key)) {
+                        EnchantmentData data = wantedEnchantments.getData(key);
                         
                         // Check constraints
                         if (level >= data.minLevel && price <= data.maxPrice) {
                             if (mc.player != null) {
                                 String msg = String.format("§a[VillagerRoller] Found: %s %d | Price: %d", 
-                                        ench.getFullname(level).getString(), level, price);
+                                        Enchantment.getFullname(enchHolder, level).getString(), level, price);
                                 mc.player.displayClientMessage(Component.literal(msg), false);
                             }
                             return true;
@@ -313,7 +320,7 @@ public class VillagerRoller extends Module {
                             // Log partial match?
                              if (mc.player != null) {
                                  String msg = String.format("§e[VillagerRoller] Skip: %s %d | Price: %d (Wanted: Lv%d+, Price<=%d)", 
-                                        ench.getFullname(level).getString(), level, price, data.minLevel, data.maxPrice);
+                                        Enchantment.getFullname(enchHolder, level).getString(), level, price, data.minLevel, data.maxPrice);
                                  mc.player.displayClientMessage(Component.literal(msg), true);
                             }
                         }
