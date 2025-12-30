@@ -241,9 +241,15 @@ public class VillagerRoller extends Module {
                      if (mc.gameMode != null) {
                          mc.gameMode.stopDestroyBlock(); // Ensure we stop breaking
                      }
-                     setState(State.CHECK_VILLAGER);
+                     setState(State.WAIT_FOR_UNEMPLOYED);
                  }
                  break;
+
+            case WAIT_FOR_UNEMPLOYED:
+                if (targetVillager.getVillagerData().getProfession() == VillagerProfession.NONE) {
+                    setState(State.PLACE_BLOCK);
+                }
+                break;
         }
     }
     
@@ -362,6 +368,7 @@ public class VillagerRoller extends Module {
         WAIT_FOR_JOB,
         OPEN_GUI,
         CHECK_TRADES,
-        BREAK_BLOCK
+        BREAK_BLOCK,
+        WAIT_FOR_UNEMPLOYED
     }
 }
