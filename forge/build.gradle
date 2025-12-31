@@ -1,0 +1,35 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '6.0.+'
+    id 'org.parchmentmc.librarian.forgegradle' version '1.+'
+    id 'org.spongepowered.mixin' version '0.7.+'
+}
+
+// Định nghĩa source set của 'shared' để compile chung
+def commonSource = project(':common').sourceSets.main
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    // ... config runs ...
+}
+
+sourceSets {
+    main {
+        // QUAN TRỌNG: Thêm code từ folder 'shared' vào đây
+        java {
+            srcDir commonSource.java.srcDirs
+        }
+        resources {
+            srcDir commonSource.resources.srcDirs
+        }
+    }
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0' // Version Forge 1.20.1
+    implementation project(':common') // Kế thừa core logic
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+mixin {
+    add sourceSets.main, "advancedutilities.refmap.json"
+}

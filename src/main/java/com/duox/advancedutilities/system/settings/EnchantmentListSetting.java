@@ -41,6 +41,7 @@ public class EnchantmentListSetting extends Setting<LinkedHashMap<String, Enchan
         return value.containsKey(enchantmentId) && value.get(enchantmentId).enabled;
     }
 
+
     @Override
     public JsonElement save() {
         JsonObject map = new JsonObject();
