@@ -7,7 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.LinkedHashMap;
 
@@ -45,7 +45,7 @@ public class EnchantmentListSetting extends Setting<LinkedHashMap<Enchantment, E
     public JsonElement save() {
         JsonObject map = new JsonObject();
         this.value.forEach((ench, data) -> {
-            ResourceLocation key = ForgeRegistries.ENCHANTMENTS.getKey(ench);
+            ResourceLocation key = BuiltInRegistries.ENCHANTMENT.getKey(ench);
             if (key != null) {
                 JsonObject dataObj = new JsonObject();
                 dataObj.addProperty("enabled", data.enabled);
@@ -66,17 +66,17 @@ public class EnchantmentListSetting extends Setting<LinkedHashMap<Enchantment, E
 
         for (String key : obj.keySet()) {
             ResourceLocation rl = ResourceLocation.tryParse(key);
-            if (rl != null && ForgeRegistries.ENCHANTMENTS.containsKey(rl)) {
+            if (rl != null && BuiltInRegistries.ENCHANTMENT.containsKey(rl)) {
                 JsonElement dataElem = obj.get(key);
                 if (dataElem.isJsonObject()) {
                     JsonObject dataObj = dataElem.getAsJsonObject();
                     boolean enabled = dataObj.has("enabled") ? dataObj.get("enabled").getAsBoolean() : true;
                     int minLevel = dataObj.has("minLevel") ? dataObj.get("minLevel").getAsInt() : 1;
                     int maxPrice = dataObj.has("maxPrice") ? dataObj.get("maxPrice").getAsInt() : 64;
-                    newMap.put(ForgeRegistries.ENCHANTMENTS.getValue(rl), new EnchantmentData(enabled, minLevel, maxPrice));
+                    newMap.put(BuiltInRegistries.ENCHANTMENT.get(rl), new EnchantmentData(enabled, minLevel, maxPrice));
                 } else if (dataElem.isJsonPrimitive() && dataElem.getAsJsonPrimitive().isBoolean()) {
                     // Legacy support for boolean
-                    newMap.put(ForgeRegistries.ENCHANTMENTS.getValue(rl), new EnchantmentData(dataElem.getAsBoolean(), 1, 64));
+                    newMap.put(BuiltInRegistries.ENCHANTMENT.get(rl), new EnchantmentData(dataElem.getAsBoolean(), 1, 64));
                 }
             }
         }

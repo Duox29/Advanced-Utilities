@@ -16,7 +16,7 @@ import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,15 +79,15 @@ public class EnchantmentListWidget extends SettingWidget {
             if (val != null && !val.isEmpty()) {
                 try {
                     ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
-                    if (rl != null && ForgeRegistries.ENCHANTMENTS.containsKey(rl)) {
+                    if (rl != null && BuiltInRegistries.ENCHANTMENT.containsKey(rl)) {
                         int lvl = 1;
                         int price = 64;
                         try { lvl = Integer.parseInt(levelInput.getValue()); } catch (Exception e) {}
                         try { price = Integer.parseInt(priceInput.getValue()); } catch (Exception e) {}
                         
-                        setting.add(ForgeRegistries.ENCHANTMENTS.getValue(rl));
+                        setting.add(BuiltInRegistries.ENCHANTMENT.get(rl));
                         // Update data
-                        EnchantmentData data = setting.getData(ForgeRegistries.ENCHANTMENTS.getValue(rl));
+                        EnchantmentData data = setting.getData(BuiltInRegistries.ENCHANTMENT.get(rl));
                         if (data != null) {
                             data.minLevel = lvl;
                             data.maxPrice = price;

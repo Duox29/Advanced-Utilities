@@ -7,7 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.LinkedHashMap;
 
@@ -40,7 +40,7 @@ public class ItemListSetting extends Setting<LinkedHashMap<Item, Boolean>> {
     public JsonElement save() {
         JsonObject map = new JsonObject();
         this.value.forEach((item, enabled) -> {
-            ResourceLocation key = ForgeRegistries.ITEMS.getKey(item);
+            ResourceLocation key = BuiltInRegistries.ITEM.getKey(item);
             if (key != null) map.addProperty(key.toString(), enabled);
         });
         return map;
@@ -55,8 +55,8 @@ public class ItemListSetting extends Setting<LinkedHashMap<Item, Boolean>> {
 
         for (String key : obj.keySet()) {
             ResourceLocation rl = ResourceLocation.tryParse(key);
-            if (rl != null && ForgeRegistries.ITEMS.containsKey(rl)) {
-                newMap.put(ForgeRegistries.ITEMS.getValue(rl), obj.get(key).getAsBoolean());
+            if (rl != null && BuiltInRegistries.ITEM.containsKey(rl)) {
+                newMap.put(BuiltInRegistries.ITEM.get(rl), obj.get(key).getAsBoolean());
             }
         }
         this.value = newMap;

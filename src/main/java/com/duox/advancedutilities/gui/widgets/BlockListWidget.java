@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,8 +59,8 @@ public class BlockListWidget extends SettingWidget {
             String val = idInput.getValue();
             if (val != null && !val.isEmpty()) {
                 ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
-                if (rl != null && ForgeRegistries.BLOCKS.containsKey(rl)) {
-                    setting.add(ForgeRegistries.BLOCKS.getValue(rl));
+                if (rl != null && BuiltInRegistries.BLOCK.containsKey(rl)) {
+                    setting.add(BuiltInRegistries.BLOCK.get(rl));
                     ConfigManager.getInstance().save();
                     idInput.setValue("");
                     if (onRefreshCallback != null) onRefreshCallback.run();

@@ -15,7 +15,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraftforge.common.ForgeSpawnEggItem;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -72,8 +72,8 @@ public class EntityListWidget extends SettingWidget {
             if (val != null && !val.isEmpty()) {
                 try {
                     ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
-                    if (rl != null && ForgeRegistries.ENTITY_TYPES.containsKey(rl)) {
-                        setting.add(ForgeRegistries.ENTITY_TYPES.getValue(rl));
+                    if (rl != null && BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) {
+                        setting.add(BuiltInRegistries.ENTITY_TYPE.get(rl));
                         ConfigManager.getInstance().save();
                         idInput.setValue("");
                         if (onRefreshCallback != null) onRefreshCallback.run(); // Trigger layout update
