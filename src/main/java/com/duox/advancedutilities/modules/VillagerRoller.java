@@ -19,6 +19,7 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -304,8 +305,9 @@ public class VillagerRoller extends Module {
                          mc.player.displayClientMessage(Component.literal(logMsg), false);
                     }
 
-                    if (wantedEnchantments.contains(ench)) {
-                        EnchantmentData data = wantedEnchantments.getData(ench);
+                    String enchId = BuiltInRegistries.ENCHANTMENT.getKey(ench).toString();
+                    if (wantedEnchantments.contains(enchId)) {
+                        EnchantmentData data = wantedEnchantments.getData(enchId);
                         
                         // Check constraints
                         if (level >= data.minLevel && price <= data.maxPrice) {

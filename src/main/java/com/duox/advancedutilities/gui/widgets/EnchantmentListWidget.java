@@ -85,9 +85,9 @@ public class EnchantmentListWidget extends SettingWidget {
                         try { lvl = Integer.parseInt(levelInput.getValue()); } catch (Exception e) {}
                         try { price = Integer.parseInt(priceInput.getValue()); } catch (Exception e) {}
                         
-                        setting.add(BuiltInRegistries.ENCHANTMENT.get(rl));
+                        setting.add(rl.toString());
                         // Update data
-                        EnchantmentData data = setting.getData(BuiltInRegistries.ENCHANTMENT.get(rl));
+                        EnchantmentData data = setting.getData(rl.toString());
                         if (data != null) {
                             data.minLevel = lvl;
                             data.maxPrice = price;
@@ -118,13 +118,17 @@ public class EnchantmentListWidget extends SettingWidget {
         int currentY = startY;
         int limitX = x + width - ITEM_SIZE;
 
-        for (Map.Entry<Enchantment, EnchantmentData> entry : setting.getValue().entrySet()) {
+        for (Map.Entry<String, EnchantmentData> entry : setting.getValue().entrySet()) {
             if (currentX > limitX) {
                 currentX = startX;
                 currentY += ITEM_SIZE;
             }
 
-            Enchantment enchant = entry.getKey();
+            String id = entry.getKey();
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            Enchantment enchant = (rl != null) ? BuiltInRegistries.ENCHANTMENT.get(rl) : null;
+            if (enchant == null) continue;
+
             EnchantmentData data = entry.getValue();
             boolean enabled = data.enabled;
 
@@ -160,8 +164,8 @@ public class EnchantmentListWidget extends SettingWidget {
         int currentY = startY;
         int limitX = x + width - ITEM_SIZE;
 
-        List<Enchantment> keys = new ArrayList<>(setting.getValue().keySet());
-        for (Enchantment enchant : keys) {
+        List<String> keys = new ArrayList<>(setting.getValue().keySet());
+        for (String id : keys) {
             if (currentX > limitX) {
                 currentX = startX;
                 currentY += ITEM_SIZE;
@@ -169,9 +173,9 @@ public class EnchantmentListWidget extends SettingWidget {
 
             if (mouseX >= currentX && mouseX <= currentX + 16 && mouseY >= currentY && mouseY <= currentY + 16) {
                 if (button == 0) {
-                    setting.toggle(enchant);
+                    setting.toggle(id);
                 } else if (button == 1) {
-                    setting.remove(enchant);
+                    setting.remove(id);
                     if (onRefreshCallback != null) onRefreshCallback.run();
                 }
                 ConfigManager.getInstance().save();
