@@ -11,6 +11,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.resources.ResourceLocation;
@@ -101,10 +102,8 @@ public class AutoStash extends Module {
     public void onEnable() {
         resetState();
         if (rebuildCache.getValue()) {
-            LOGGER.info("AutoStash: Starting Cache Rebuild...");
             startRebuildCache();
         } else {
-            LOGGER.info("AutoStash: Starting Smart Stash...");
             startSmartStash();
         }
     }
@@ -218,7 +217,7 @@ public class AutoStash extends Module {
             // Done scanning
             saveCache();
             rebuildCache.setValue(false);
-            LOGGER.info("AutoStash: Cache rebuild complete. Saved to disk.");
+            sendMessage("Cache rebuild complete. Saved to disk.");
             this.setEnabled(false);
             return;
         }
@@ -278,7 +277,7 @@ public class AutoStash extends Module {
         loadCache();
 
         if (chestCache.isEmpty()) {
-            LOGGER.warn("AutoStash: Cache is empty. Please run Rebuild Cache first.");
+            sendMessage("§cCache is empty. Please run Rebuild Cache first.");
             this.setEnabled(false);
             return;
         }
@@ -286,7 +285,7 @@ public class AutoStash extends Module {
         calculateStashPlan();
 
         if (stashQueue.isEmpty()) {
-            LOGGER.info("AutoStash: Nothing to stash.");
+            sendMessage("Nothing to stash.");
             this.setEnabled(false);
             return;
         }
@@ -459,6 +458,12 @@ public class AutoStash extends Module {
              moveToNextStashTarget();
         } else {
             currentState = nextState;
+        }
+    }
+
+    private void sendMessage(String message) {
+        if (mc.player != null) {
+            mc.player.displayClientMessage(Component.literal("§b[AutoStash] §r" + message), false);
         }
     }
 
