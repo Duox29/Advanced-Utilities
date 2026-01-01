@@ -14,21 +14,16 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -40,12 +35,10 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class AutoStash extends Module {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CACHE_FILE = FMLPaths.CONFIGDIR.get().resolve("autostash_cache.json");
 
     // --- Settings ---
     private final NumberSetting range = new NumberSetting("Range", 5.0, 1.0, 10.0, 0.5);
@@ -258,10 +251,11 @@ public class AutoStash extends Module {
 
     private void saveCache() {
         try {
-            if (!Files.exists(CACHE_FILE.getParent())) {
-                Files.createDirectories(CACHE_FILE.getParent());
+            Path cacheFile = getCacheFile();
+            if (!Files.exists(cacheFile.getParent())) {
+                Files.createDirectories(cacheFile.getParent());
             }
-            try (Writer writer = new FileWriter(CACHE_FILE.toFile())) {
+            try (Writer writer = new FileWriter(cacheFile.toFile())) {
                 GSON.toJson(chestCache, writer);
             }
         } catch (IOException e) {
@@ -295,9 +289,10 @@ public class AutoStash extends Module {
     }
 
     private void loadCache() {
-        if (!Files.exists(CACHE_FILE)) return;
+        Path cacheFile = getCacheFile();
+        if (!Files.exists(cacheFile)) return;
 
-        try (Reader reader = new FileReader(CACHE_FILE.toFile())) {
+        try (Reader reader = new FileReader(cacheFile.toFile())) {
             Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
             Map<String, Map<String, Integer>> loaded = GSON.fromJson(reader, type);
             if (loaded != null) {
@@ -306,6 +301,21 @@ public class AutoStash extends Module {
         } catch (IOException e) {
             LOGGER.error("AutoStash: Failed to load cache", e);
         }
+    }
+
+    private Path getCacheFile() {
+        String serverId = getServerIdentifier();
+        String safeId = serverId.replaceAll("[^a-zA-Z0-9._-]", "_");
+        return FMLPaths.CONFIGDIR.get().resolve("autostash_" + safeId + ".json");
+    }
+
+    private String getServerIdentifier() {
+        if (mc.getSingleplayerServer() != null) {
+            return "sp_" + mc.getSingleplayerServer().getWorldData().getLevelName();
+        } else if (mc.getCurrentServer() != null) {
+            return "mp_" + mc.getCurrentServer().ip.replaceAll("[:/]", "_");
+        }
+        return "default";
     }
 
     private void calculateStashPlan() {
