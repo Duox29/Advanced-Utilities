@@ -4,18 +4,25 @@ import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.BooleanSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -28,29 +35,33 @@ public class AutoStash extends Module {
 
     private final NumberSetting range = new NumberSetting("Range", 5.0, 1.0, 10.0, 0.5);
     private final BooleanSetting includeHotbar = new BooleanSetting("Include Hotbar", false);
+    private final NumberSetting itemsPerTick = new NumberSetting("Items/Tick", 4.0, 1.0, 27.0, 1.0);
 
-    // One-Shot & State Variables
     private final Set<BlockPos> visitedChests = new HashSet<>();
     private State currentState = State.SCANNING;
     private BlockPos currentTarget = null;
-    private int containerOpenWaitTimer = 0;
+    private int waitTimer = 0;
 
-    // To handle multiple chests in one run, we keep a queue or just scan loop
-    // Since we need to wait for server response, we handle one at a time.
+    private boolean silentMode = true;
+    private int silentContainerId = -1;
+    private MenuType<?> silentMenuType = null;
+    private boolean containerReady = false;
 
     private enum State {
         SCANNING,
         OPENING,
         WAITING_FOR_OPEN,
         STASHING,
+        CLOSING,
         FINISHED
     }
 
     public AutoStash() {
-        super("AutoStash", "One-Shot: Scans nearby chests, stashes matching items instantly, then disables.",
+        super("AutoStash", "Silent stash: Opens chests invisibly, moves matching items via packets.",
                 Category.WORLD);
         this.addSetting(range);
         this.addSetting(includeHotbar);
+        this.addSetting(itemsPerTick);
     }
 
     @Override
@@ -58,12 +69,28 @@ public class AutoStash extends Module {
         visitedChests.clear();
         currentState = State.SCANNING;
         currentTarget = null;
+        silentMode = true;
+        silentContainerId = -1;
+        containerReady = false;
+    }
 
-        // Optional: Notify user
-        if (mc.player != null) {
-            // mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("AutoStash
-            // Started..."), true);
+    @Override
+    public void onDisable() {
+        if (silentContainerId != -1 && mc.player != null) {
+            sendClosePacket();
         }
+        silentContainerId = -1;
+        containerReady = false;
+    }
+
+    public boolean isSilentMode() {
+        return silentMode && isEnabled();
+    }
+
+    public void onSilentContainerOpen(int containerId, MenuType<?> menuType) {
+        this.silentContainerId = containerId;
+        this.silentMenuType = menuType;
+        this.containerReady = true;
     }
 
     @Override
@@ -73,19 +100,21 @@ public class AutoStash extends Module {
             return;
         }
 
-        // Fast State Machine - executed every tick
         switch (currentState) {
             case SCANNING:
                 scanAndTargetNext();
                 break;
             case OPENING:
-                openTarget();
+                openTargetSilent();
                 break;
             case WAITING_FOR_OPEN:
-                checkForContainer();
+                waitForContainer();
                 break;
             case STASHING:
-                performStash();
+                performSilentStash();
+                break;
+            case CLOSING:
+                closeSilent();
                 break;
             case FINISHED:
                 this.setEnabled(false);
@@ -103,7 +132,6 @@ public class AutoStash extends Module {
             for (int y = -r; y <= r; y++) {
                 for (int z = -r; z <= r; z++) {
                     BlockPos pos = playerPos.offset(x, y, z);
-                    // Skip if already processed in this session
                     if (visitedChests.contains(pos))
                         continue;
 
@@ -116,11 +144,10 @@ public class AutoStash extends Module {
         }
 
         if (candidates.isEmpty()) {
-            currentState = State.FINISHED; // No more chests
+            currentState = State.FINISHED;
             return;
         }
 
-        // Sort by distance to minimize rotation snaps (if we added rotations)
         candidates.sort(Comparator.comparingDouble(be -> be.getBlockPos().distSqr(playerPos)));
 
         currentTarget = candidates.get(0).getBlockPos();
@@ -128,60 +155,98 @@ public class AutoStash extends Module {
     }
 
     private boolean isValidContainer(BlockEntity be) {
-        return be instanceof ChestBlockEntity || be instanceof BarrelBlockEntity || be instanceof ShulkerBoxBlockEntity;
+        return be instanceof ChestBlockEntity
+                || be instanceof BarrelBlockEntity
+                || be instanceof ShulkerBoxBlockEntity;
     }
 
-    private void openTarget() {
+    private void openTargetSilent() {
         if (currentTarget == null) {
             currentState = State.SCANNING;
             return;
         }
 
-        // Interact
+        markDoubleChestVisited(currentTarget);
+
         Vec3 center = Vec3.atCenterOf(currentTarget);
         BlockHitResult hitResult = new BlockHitResult(center, Direction.UP, currentTarget, false);
 
-        // Client-side open request
+        containerReady = false;
+        silentContainerId = -1;
+
         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
 
-        // Wait for server to open the GUI
+        mc.player.swing(InteractionHand.MAIN_HAND);
+
         currentState = State.WAITING_FOR_OPEN;
-        containerOpenWaitTimer = 20; // 1 second timeout for lag
+        waitTimer = 40;
     }
 
-    private void checkForContainer() {
-        // Check if a container menu is open and it's not the default player inventory
-        // container
-        if (mc.player.containerMenu != mc.player.inventoryMenu
-                && mc.player.containerMenu.stillValid(mc.player)) {
-            currentState = State.STASHING;
-        } else {
-            containerOpenWaitTimer--;
-            if (containerOpenWaitTimer <= 0) {
-                // Timeout: Close whatever might be partially open and skip this chest
-                mc.player.closeContainer();
-                visitedChests.add(currentTarget);
-                currentState = State.SCANNING;
+    private void markDoubleChestVisited(BlockPos pos) {
+        visitedChests.add(pos);
+
+        BlockState state = mc.level.getBlockState(pos);
+        if (state.getBlock() instanceof ChestBlock) {
+            if (state.hasProperty(ChestBlock.TYPE)) {
+                ChestType type = state.getValue(ChestBlock.TYPE);
+                if (type != ChestType.SINGLE) {
+                    Direction facing = state.getValue(ChestBlock.FACING);
+                    BlockPos neighborPos = getDoubleChestNeighbor(pos, type, facing);
+                    if (neighborPos != null) {
+                        visitedChests.add(neighborPos);
+                    }
+                }
             }
         }
     }
 
-    private void performStash() {
-        AbstractContainerMenu menu = mc.player.containerMenu;
+    private BlockPos getDoubleChestNeighbor(BlockPos pos, ChestType type, Direction facing) {
+        Direction neighborDir;
+        if (type == ChestType.LEFT) {
+            neighborDir = facing.getClockWise();
+        } else {
+            neighborDir = facing.getCounterClockWise();
+        }
+        return pos.relative(neighborDir);
+    }
 
-        // Auto-detect container size
-        // Usually: Total slots - 36 (Player Inv 27 + Hotbar 9)
+    private void waitForContainer() {
+        if (containerReady && silentContainerId != -1) {
+            waitTimer = 2;
+            currentState = State.STASHING;
+            return;
+        }
+
+        waitTimer--;
+        if (waitTimer <= 0) {
+            visitedChests.add(currentTarget);
+            currentState = State.SCANNING;
+        }
+    }
+
+    private void performSilentStash() {
+        if (waitTimer > 0) {
+            waitTimer--;
+            return;
+        }
+
+        LocalPlayer player = mc.player;
+        AbstractContainerMenu menu = player.containerMenu;
+
+        if (menu == player.inventoryMenu) {
+            currentState = State.SCANNING;
+            return;
+        }
+
         int totalSlots = menu.slots.size();
         int playerSlots = 36;
         int containerSlots = totalSlots - playerSlots;
 
         if (containerSlots <= 0) {
-            // Weird state, close and skip
-            closeAndNext();
+            currentState = State.CLOSING;
             return;
         }
 
-        // 1. Scan Chest for Item Types
         Set<net.minecraft.world.item.Item> chestItemTypes = new HashSet<>();
         for (int i = 0; i < containerSlots; i++) {
             ItemStack stack = menu.getSlot(i).getItem();
@@ -190,40 +255,58 @@ public class AutoStash extends Module {
             }
         }
 
-        // 2. Scan Player Inventory (Excluding Hotbar)
-        // Player Inventory in container view:
-        // ContainerSlots ... (ContainerSlots + 27) -> Main Inventory
-        // (ContainerSlots + 27) ... End -> Hotbar
-
         int startInv = containerSlots;
-        int endInv = includeHotbar.getValue() ? totalSlots : containerSlots + 27; // If includeHotbar is true, scan everything. Else stop before hotbar
+        int endInv = includeHotbar.getValue() ? totalSlots : containerSlots + 27;
 
-        // Loop through all player input slots
+        List<Integer> slotsToMove = new ArrayList<>();
         for (int i = startInv; i < endInv; i++) {
             Slot slot = menu.getSlot(i);
             if (slot.hasItem()) {
                 ItemStack stack = slot.getItem();
                 if (chestItemTypes.contains(stack.getItem())) {
-                    // Match! Move it instantly.
-                    // ClickType.QUICK_MOVE = Shift Click
-                    mc.gameMode.handleInventoryMouseClick(menu.containerId, i, 0, ClickType.QUICK_MOVE, mc.player);
+                    slotsToMove.add(i);
                 }
             }
         }
 
-        // 3. Close Immediately
-        closeAndNext();
+        int itemsThisTick = Math.min(slotsToMove.size(), itemsPerTick.getInt());
+        for (int i = 0; i < itemsThisTick; i++) {
+            int slotId = slotsToMove.get(i);
+            sendQuickMovePacket(menu, slotId);
+        }
+
+        if (slotsToMove.size() <= itemsThisTick) {
+            currentState = State.CLOSING;
+        }
     }
 
-    private void closeAndNext() {
-        // Send close
-        mc.player.closeContainer();
+    private void sendQuickMovePacket(AbstractContainerMenu menu, int slotId) {
+        int containerId = menu.containerId;
+        int stateId = menu.getStateId();
 
-        // Try to quiet animation?
-        // Hard to do without mixins, but closing immediately limits the time the chest
-        // is open.
-
-        visitedChests.add(currentTarget);
-        currentState = State.SCANNING; // Go to next chest
+        mc.player.connection.send(new ServerboundContainerClickPacket(
+                containerId,
+                stateId,
+                slotId,
+                0,
+                ClickType.QUICK_MOVE,
+                ItemStack.EMPTY,
+                new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>()
+        ));
     }
+
+    private void closeSilent() {
+        sendClosePacket();
+        silentContainerId = -1;
+        containerReady = false;
+        currentState = State.SCANNING;
+    }
+
+    private void sendClosePacket() {
+        if (mc.player != null && mc.player.containerMenu != mc.player.inventoryMenu) {
+            mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
+            mc.player.containerMenu = mc.player.inventoryMenu;
+        }
+    }
+
 }
