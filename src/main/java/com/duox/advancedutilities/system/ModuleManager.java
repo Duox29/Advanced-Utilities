@@ -42,6 +42,9 @@ public class ModuleManager {
         register(new FullBright());
         register(new Zoom());
         register(new Finder());
+
+        // World category modules (continued or new)
+        register(new AutoStash());
     }
 
     /**
@@ -57,7 +60,7 @@ public class ModuleManager {
      * Gets a module by its class.
      *
      * @param clazz The class of the module to retrieve
-     * @param <T> The type of module
+     * @param <T>   The type of module
      * @return The module instance, or null if not found
      */
     @SuppressWarnings("unchecked")
@@ -78,7 +81,7 @@ public class ModuleManager {
      * Sets the enabled state of a module and saves the configuration.
      *
      * @param module The module to modify
-     * @param state The new enabled state
+     * @param state  The new enabled state
      */
     public void setModuleState(Module module, boolean state) {
         module.setEnabled(state);
@@ -109,12 +112,13 @@ public class ModuleManager {
                 if (module.isHold()) {
                     boolean isKeyDown = module.getKeyMapping().isDown();
                     if (module.isEnabled() != isKeyDown) {
-                         module.setEnabled(isKeyDown);
-                         // Optional: Don't notify for hold modules to avoid spam
-                         // toggledModules.add(module);
+                        module.setEnabled(isKeyDown);
+                        // Optional: Don't notify for hold modules to avoid spam
+                        // toggledModules.add(module);
                     }
                     // Consume click to prevent it from accumulating
-                    while (module.getKeyMapping().consumeClick()) {}
+                    while (module.getKeyMapping().consumeClick()) {
+                    }
                 } else {
                     while (module.getKeyMapping().consumeClick()) {
                         module.setEnabled(!module.isEnabled());
@@ -127,10 +131,13 @@ public class ModuleManager {
                 net.minecraft.network.chat.MutableComponent message = net.minecraft.network.chat.Component.empty();
                 for (int i = 0; i < toggledModules.size(); i++) {
                     Module m = toggledModules.get(i);
-                    if (i > 0) message.append(net.minecraft.network.chat.Component.literal(", ").withStyle(net.minecraft.ChatFormatting.GRAY));
-                    
+                    if (i > 0)
+                        message.append(net.minecraft.network.chat.Component.literal(", ")
+                                .withStyle(net.minecraft.ChatFormatting.GRAY));
+
                     message.append(net.minecraft.network.chat.Component.literal(m.getName())
-                            .withStyle(m.isEnabled() ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED));
+                            .withStyle(m.isEnabled() ? net.minecraft.ChatFormatting.GREEN
+                                    : net.minecraft.ChatFormatting.RED));
                 }
                 Minecraft.getInstance().gui.setOverlayMessage(message, false);
             }
