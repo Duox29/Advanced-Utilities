@@ -45,6 +45,7 @@ public class ModuleManager {
 
         // World category modules (continued or new)
         register(new AutoStash());
+        register(new StorageManager());
     }
 
     /**

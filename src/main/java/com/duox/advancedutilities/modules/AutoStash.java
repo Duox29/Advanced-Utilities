@@ -36,6 +36,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.state.properties.ChestType;
+
 public class AutoStash extends Module {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -49,7 +52,11 @@ public class AutoStash extends Module {
     // --- Cache Data Structures ---
     // Key: Chest Position string "x,y,z"
     // Value: Map of Item ResourceLocation string -> Quantity
-    private Map<String, Map<String, Integer>> chestCache = new HashMap<>();
+    private static Map<String, Map<String, Integer>> chestCache = new HashMap<>();
+
+    public static Map<String, Map<String, Integer>> getChestCache() {
+        return chestCache;
+    }
 
     // --- Runtime Variables ---
     private State currentState = State.IDLE;
@@ -193,6 +200,7 @@ public class AutoStash extends Module {
                     BlockPos pos = playerPos.offset(x, y, z);
                     BlockEntity be = mc.level.getBlockEntity(pos);
                     if (isValidContainer(be)) {
+                        if (isDuplicateDoubleChest(be)) continue;
                         scanQueue.add(pos);
                     }
                 }
@@ -481,6 +489,18 @@ public class AutoStash extends Module {
         return be instanceof ChestBlockEntity ||
                 be instanceof BarrelBlockEntity ||
                 be instanceof ShulkerBoxBlockEntity;
+    }
+
+    private boolean isDuplicateDoubleChest(BlockEntity be) {
+        if (be instanceof ChestBlockEntity) {
+            net.minecraft.world.level.block.state.BlockState state = be.getBlockState();
+            if (state.hasProperty(ChestBlock.TYPE)) {
+                // Only scan SINGLE or RIGHT part of double chest to avoid duplicates
+                // Opening the RIGHT part usually opens the full double chest
+                return state.getValue(ChestBlock.TYPE) == ChestType.LEFT;
+            }
+        }
+        return false;
     }
 
     private void sendQuickMovePacket(AbstractContainerMenu menu, int slotId) {

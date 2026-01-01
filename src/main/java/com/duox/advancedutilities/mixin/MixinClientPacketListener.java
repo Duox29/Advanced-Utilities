@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.mixin;
 
 import com.duox.advancedutilities.modules.AutoStash;
+import com.duox.advancedutilities.modules.StorageManager;
 import com.duox.advancedutilities.system.ModuleManager;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
@@ -17,6 +18,11 @@ public class MixinClientPacketListener {
         AutoStash autoStash = ModuleManager.INSTANCE.getModule(AutoStash.class);
         if (autoStash != null && autoStash.isEnabled() && autoStash.isSilentMode()) {
             autoStash.onSilentContainerOpen(packet.getContainerId(), packet.getType());
+        }
+
+        StorageManager storageManager = ModuleManager.INSTANCE.getModule(StorageManager.class);
+        if (storageManager != null && storageManager.isEnabled()) {
+            storageManager.onSilentContainerOpen(packet.getContainerId(), packet.getType());
         }
     }
 }
