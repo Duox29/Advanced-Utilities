@@ -244,7 +244,9 @@ public class StorageManager extends Module {
         this.silentContainerId = containerId;
         this.containerReady = true;
     }
-
+    public boolean isSilentMode() {
+        return this.isEnabled();
+    }
     private void performWithdrawal() {
         AbstractContainerMenu menu = mc.player.containerMenu;
         int containerSlots = menu.slots.size() - 36;

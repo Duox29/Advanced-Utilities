@@ -21,7 +21,7 @@ public class MixinClientPacketListener {
         }
 
         StorageManager storageManager = ModuleManager.INSTANCE.getModule(StorageManager.class);
-        if (storageManager != null && storageManager.isEnabled()) {
+        if (storageManager != null && storageManager.isEnabled() && storageManager.isSilentMode()) {
             storageManager.onSilentContainerOpen(packet.getContainerId(), packet.getType());
         }
     }

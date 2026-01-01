@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.mixin;
 
 import com.duox.advancedutilities.modules.AutoStash;
+import com.duox.advancedutilities.modules.StorageManager;
 import com.duox.advancedutilities.system.ModuleManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,6 +20,13 @@ public class MixinMinecraft {
             AutoStash autoStash = ModuleManager.INSTANCE.getModule(AutoStash.class);
             if (autoStash != null && autoStash.isEnabled() && autoStash.isSilentMode()) {
                 ci.cancel();
+                return;
+            }
+
+            StorageManager storageManager = ModuleManager.INSTANCE.getModule(StorageManager.class);
+            if (storageManager != null && storageManager.isEnabled() && storageManager.isSilentMode()) {
+                ci.cancel();
+                return;
             }
         }
     }
