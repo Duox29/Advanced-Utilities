@@ -4,8 +4,6 @@ import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.BooleanSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -26,13 +24,9 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.fml.loading.FMLPaths;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import com.duox.advancedutilities.utils.CacheUtils;
 import java.io.*;
 import java.lang.reflect.Type;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -40,9 +34,6 @@ import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.state.properties.ChestType;
 
 public class AutoStash extends Module {
-    private static final Logger LOGGER = LogManager.getLogger();
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
     // --- Settings ---
     private final NumberSetting range = new NumberSetting("Range", 5.0, 1.0, 10.0, 0.5);
     private final BooleanSetting includeHotbar = new BooleanSetting("Include Hotbar", false);
@@ -216,7 +207,8 @@ public class AutoStash extends Module {
     private void processScanQueue() {
         if (scanQueue.isEmpty()) {
             // Done scanning
-            saveCache();
+            Path cacheFile = CacheUtils.getCacheFilePath(mc,"autostash");
+            CacheUtils.saveToJson(cacheFile, chestCache);
             rebuildCache.setValue(false);
             sendMessage("Cache rebuild complete. Saved to disk.");
             this.setEnabled(false);
@@ -246,7 +238,7 @@ public class AutoStash extends Module {
             }
 
             // Save to cache
-            String posKey = posToString(currentTarget);
+            String posKey =CacheUtils.posToString(currentTarget);
             chestCache.put(posKey, contents);
 
             // Handle double chests: Also map the other half to the same contents?
@@ -257,27 +249,15 @@ public class AutoStash extends Module {
         currentState = State.CLOSING_AFTER_SCAN;
     }
 
-    private void saveCache() {
-        try {
-            Path cacheFile = getCacheFile();
-            if (!Files.exists(cacheFile.getParent())) {
-                Files.createDirectories(cacheFile.getParent());
-            }
-            try (Writer writer = new FileWriter(cacheFile.toFile())) {
-                GSON.toJson(chestCache, writer);
-            }
-        } catch (IOException e) {
-            LOGGER.error("AutoStash: Failed to save cache", e);
-        }
-    }
-
     // ============================================================================================
     // SMART STASH LOGIC
     // ============================================================================================
 
     private void startSmartStash() {
-        loadCache();
+        Path cacheFile = CacheUtils.getCacheFilePath(mc, "autostash");
+        Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
 
+        Map<String, Map<String, Integer>> loaded = CacheUtils.loadFromJson(cacheFile, type);
         if (chestCache.isEmpty()) {
             sendMessage("§cCache is empty. Please run Rebuild Cache first.");
             this.setEnabled(false);
@@ -294,36 +274,6 @@ public class AutoStash extends Module {
 
         stashIterator = stashQueue.entrySet().iterator();
         moveToNextStashTarget();
-    }
-
-    private void loadCache() {
-        Path cacheFile = getCacheFile();
-        if (!Files.exists(cacheFile)) return;
-
-        try (Reader reader = new FileReader(cacheFile.toFile())) {
-            Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
-            Map<String, Map<String, Integer>> loaded = GSON.fromJson(reader, type);
-            if (loaded != null) {
-                chestCache = loaded;
-            }
-        } catch (IOException e) {
-            LOGGER.error("AutoStash: Failed to load cache", e);
-        }
-    }
-
-    private Path getCacheFile() {
-        String serverId = getServerIdentifier();
-        String safeId = serverId.replaceAll("[^a-zA-Z0-9._-]", "_");
-        return FMLPaths.CONFIGDIR.get().resolve("autostash_" + safeId + ".json");
-    }
-
-    private String getServerIdentifier() {
-        if (mc.getSingleplayerServer() != null) {
-            return "sp_" + mc.getSingleplayerServer().getWorldData().getLevelName();
-        } else if (mc.getCurrentServer() != null) {
-            return "mp_" + mc.getCurrentServer().ip.replaceAll("[:/]", "_");
-        }
-        return "default";
     }
 
     private void calculateStashPlan() {
@@ -362,7 +312,7 @@ public class AutoStash extends Module {
             Map<String, Integer> contents = entry.getValue();
 
             if (contents.containsKey(itemId)) {
-                BlockPos pos = stringToPos(posStr);
+                BlockPos pos = CacheUtils.stringToPos(posStr);
                 // Check range
                 if (pos.distSqr(playerPos) > rangeSq) continue;
 
@@ -405,10 +355,6 @@ public class AutoStash extends Module {
         Iterator<Integer> it = slotsToMove.iterator();
         while (it.hasNext() && moves < limit) {
              int invSlotIndex = it.next();
-             // Map inventory slot index (0-35) to container menu slot index
-             // Container menu: [Container Slots] + [Inventory 27] + [Hotbar 9]
-             // invSlotIndex 0-8 (hotbar) -> containerSlots + 27 + 0..8
-             // invSlotIndex 9-35 (main) -> containerSlots + (invSlotIndex - 9)
 
              int menuSlotId;
              if (invSlotIndex < 9) {
@@ -516,14 +462,5 @@ public class AutoStash extends Module {
             mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
             mc.player.containerMenu = mc.player.inventoryMenu;
         }
-    }
-
-    private String posToString(BlockPos pos) {
-        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
-    }
-
-    private BlockPos stringToPos(String s) {
-        String[] parts = s.split(",");
-        return new BlockPos(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
     }
 }

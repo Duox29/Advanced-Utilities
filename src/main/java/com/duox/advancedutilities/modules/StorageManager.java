@@ -3,30 +3,24 @@ package com.duox.advancedutilities.modules;
 import com.duox.advancedutilities.gui.StorageScreen;
 import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
-import net.minecraft.client.Minecraft;
+import com.duox.advancedutilities.utils.CacheUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 
 public class StorageManager extends Module {
-    private static final Logger LOGGER = LogManager.getLogger();
-
     // Request Queue: Item ID -> Quantity needed
     private final Map<String, Integer> requestQueue = new HashMap<>();
 
@@ -273,6 +267,7 @@ public class StorageManager extends Module {
 
                 sendQuickMovePacket(menu, i);
 
+                updateCache(itemId, inSlot);
                 // Decrement needed count (approximation)
                 itemsToTake.put(itemId, needed - inSlot);
             }
@@ -281,6 +276,26 @@ public class StorageManager extends Module {
         currentState = State.CLOSING_CHEST;
     }
 
+    private void updateCache(String itemId, int amountTaken) {
+        if (currentTarget == null) return;
+
+        String chestJsonKey = CacheUtils.posToString(currentTarget);
+        Map<String, Map<String, Integer>> globalCache = AutoStash.getChestCache();
+        if (globalCache.containsKey(chestJsonKey)) {
+            Map<String, Integer> chestContents =  globalCache.get(chestJsonKey);
+
+            if(chestContents.containsKey(itemId) && chestContents != null) {
+                int currentAmount =  chestContents.get(itemId);
+                int newAmount = currentAmount - amountTaken;
+
+                if (newAmount <= 0) {
+                    chestContents.remove(itemId);
+                } else {
+                    chestContents.put(itemId, newAmount);
+                }
+            }
+        }
+    }
     private void closeSilent() {
         if (mc.player != null && mc.player.containerMenu != mc.player.inventoryMenu) {
             mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
