@@ -124,6 +124,10 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (AutoStash.cacheDirty) {
+            refreshItemList();
+            AutoStash.cacheDirty = false;
+        }
         // 1. Background
         graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, COLOR_BG_MAIN);
         graphics.renderOutline(x, y, PANEL_WIDTH, PANEL_HEIGHT, COLOR_BG_BORDER);

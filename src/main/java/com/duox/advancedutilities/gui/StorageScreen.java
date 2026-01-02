@@ -182,6 +182,10 @@ public class StorageScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (AutoStash.cacheDirty) {
+            refreshItemList();
+            AutoStash.cacheDirty = false; // Đã xử lý xong
+        }
         this.renderBackground(graphics);
 
         // 1. Main GUI Panel

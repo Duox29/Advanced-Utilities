@@ -41,9 +41,10 @@ public class AutoStash extends Module {
     private final BooleanSetting rebuildCache = new BooleanSetting("Rebuild Cache Next Run", false);
 
     // --- Cache Data Structures ---
-    // Key: Chest Position string "x,y,z"
-    // Value: Map of Item ResourceLocation string -> Quantity
     private static Map<String, Map<String, Integer>> chestCache = new HashMap<>();
+
+    // [NEW] Cờ đánh dấu cache đã thay đổi
+    public static boolean cacheDirty = false;
 
     public static Map<String, Map<String, Integer>> getChestCache() {
         return chestCache;
@@ -56,29 +57,15 @@ public class AutoStash extends Module {
     private int silentContainerId = -1;
     private boolean containerReady = false;
 
-    // For Scanning/Rebuilding
     private List<BlockPos> scanQueue = new ArrayList<>();
-
-    // For Stashing
-    private Map<BlockPos, List<Integer>> stashQueue = new HashMap<>(); // Chest Pos -> List of Inventory Slot IDs to move
+    private Map<BlockPos, List<Integer>> stashQueue = new HashMap<>();
     private Iterator<Map.Entry<BlockPos, List<Integer>>> stashIterator;
     private Map.Entry<BlockPos, List<Integer>> currentStashEntry;
 
     private enum State {
         IDLE,
-        // Rebuild Cache States
-        SCANNING_WORLD,
-        OPENING_FOR_SCAN,
-        WAITING_FOR_SCAN_OPEN,
-        SCANNING_CONTENTS,
-        CLOSING_AFTER_SCAN,
-
-        // Smart Stash States
-        CALCULATING_STASH,
-        OPENING_FOR_STASH,
-        WAITING_FOR_STASH_OPEN,
-        STASHING_ITEMS,
-        CLOSING_AFTER_STASH
+        SCANNING_WORLD, OPENING_FOR_SCAN, WAITING_FOR_SCAN_OPEN, SCANNING_CONTENTS, CLOSING_AFTER_SCAN,
+        CALCULATING_STASH, OPENING_FOR_STASH, WAITING_FOR_STASH_OPEN, STASHING_ITEMS, CLOSING_AFTER_STASH
     }
 
     public AutoStash() {
@@ -91,9 +78,7 @@ public class AutoStash extends Module {
 
     @Override
     public void onEnable() {
-        if (mc.player == null || mc.level == null) {
-            return;
-        }
+        if (mc.player == null || mc.level == null) return;
         resetState();
         if (rebuildCache.getValue()) {
             startRebuildCache();
@@ -104,9 +89,7 @@ public class AutoStash extends Module {
 
     @Override
     public void onDisable() {
-        if (silentContainerId != -1 && mc.player != null) {
-            sendClosePacket();
-        }
+        if (silentContainerId != -1 && mc.player != null) sendClosePacket();
         resetState();
     }
 
@@ -121,9 +104,7 @@ public class AutoStash extends Module {
         currentStashEntry = null;
     }
 
-    public boolean isSilentMode() {
-        return this.isEnabled();
-    }
+    public boolean isSilentMode() { return this.isEnabled(); }
 
     public void onSilentContainerOpen(int containerId, MenuType<?> menuType) {
         this.silentContainerId = containerId;
@@ -132,61 +113,30 @@ public class AutoStash extends Module {
 
     @Override
     public void onTick() {
-        if (mc.player == null || mc.level == null) {
-            this.setEnabled(false);
-            return;
-        }
+        if (mc.player == null || mc.level == null) { this.setEnabled(false); return; }
 
         switch (currentState) {
-            case SCANNING_WORLD:
-                processScanQueue();
-                break;
-            case OPENING_FOR_SCAN:
-                openTargetSilent();
-                break;
-            case WAITING_FOR_SCAN_OPEN:
-                waitForContainer(State.SCANNING_CONTENTS);
-                break;
-            case SCANNING_CONTENTS:
-                scanContainerContents();
-                break;
-            case CLOSING_AFTER_SCAN:
-                closeSilent(State.SCANNING_WORLD);
-                break;
+            case SCANNING_WORLD: processScanQueue(); break;
+            case OPENING_FOR_SCAN: openTargetSilent(); break;
+            case WAITING_FOR_SCAN_OPEN: waitForContainer(State.SCANNING_CONTENTS); break;
+            case SCANNING_CONTENTS: scanContainerContents(); break;
+            case CLOSING_AFTER_SCAN: closeSilent(State.SCANNING_WORLD); break;
 
-            case CALCULATING_STASH:
-                // Logic is done in startSmartStash
-                break;
-            case OPENING_FOR_STASH:
-                openTargetSilent();
-                break;
-            case WAITING_FOR_STASH_OPEN:
-                waitForContainer(State.STASHING_ITEMS);
-                break;
-            case STASHING_ITEMS:
-                performStash();
-                break;
-            case CLOSING_AFTER_STASH:
-                closeSilent(State.OPENING_FOR_STASH); // Loop back to next chest
-                break;
-
-            case IDLE:
-            default:
-                break;
+            case CALCULATING_STASH: break;
+            case OPENING_FOR_STASH: openTargetSilent(); break;
+            case WAITING_FOR_STASH_OPEN: waitForContainer(State.STASHING_ITEMS); break;
+            case STASHING_ITEMS: performStash(); break;
+            case CLOSING_AFTER_STASH: closeSilent(State.OPENING_FOR_STASH); break;
+            case IDLE: default: break;
         }
     }
 
-    // ============================================================================================
-    // REBUILD CACHE LOGIC
-    // ============================================================================================
-
     private void startRebuildCache() {
-        chestCache.clear(); // Clear memory cache
+        chestCache.clear();
+        cacheDirty = true; // [UPDATE] Đánh dấu thay đổi
         scanQueue.clear();
-
         BlockPos playerPos = mc.player.blockPosition();
         int r = range.getInt();
-
         for (int x = -r; x <= r; x++) {
             for (int y = -r; y <= r; y++) {
                 for (int z = -r; z <= r; z++) {
@@ -199,7 +149,6 @@ public class AutoStash extends Module {
                 }
             }
         }
-
         scanQueue.sort(Comparator.comparingDouble(pos -> pos.distSqr(playerPos)));
         currentState = State.SCANNING_WORLD;
     }
@@ -213,29 +162,23 @@ public class AutoStash extends Module {
             this.setEnabled(false);
             return;
         }
-
         currentTarget = scanQueue.remove(0);
         currentState = State.OPENING_FOR_SCAN;
     }
 
     private void scanContainerContents() {
-        // Logic này được dùng khi Rebuild Cache
         updateCurrentContainerToCache();
         currentState = State.CLOSING_AFTER_SCAN;
     }
 
-    // ============================================================================================
-    // SMART STASH LOGIC
-    // ============================================================================================
-
     private void startSmartStash() {
         Path cacheFile = CacheUtils.getCacheFilePath(mc, "autostash");
         Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
-
         Map<String, Map<String, Integer>> loaded = CacheUtils.loadFromJson(cacheFile, type);
-        // Load lại cache từ file vào bộ nhớ nếu cần thiết, hoặc dùng cache hiện tại
+
         if (loaded != null && chestCache.isEmpty()) {
             chestCache.putAll(loaded);
+            cacheDirty = true; // [UPDATE] Đánh dấu thay đổi khi load
         }
 
         if (chestCache.isEmpty()) {
@@ -243,15 +186,12 @@ public class AutoStash extends Module {
             this.setEnabled(false);
             return;
         }
-
         calculateStashPlan();
-
         if (stashQueue.isEmpty()) {
             sendMessage("Nothing to stash.");
             this.setEnabled(false);
             return;
         }
-
         stashIterator = stashQueue.entrySet().iterator();
         moveToNextStashTarget();
     }
@@ -260,14 +200,11 @@ public class AutoStash extends Module {
         stashQueue.clear();
         LocalPlayer player = mc.player;
         int startInv = includeHotbar.getValue() ? 0 : 9;
-
         for (int i = startInv; i < 36; i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
-
             String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
             BlockPos bestChest = findBestChest(itemId);
-
             if (bestChest != null) {
                 stashQueue.computeIfAbsent(bestChest, k -> new ArrayList<>()).add(i);
             }
@@ -277,18 +214,14 @@ public class AutoStash extends Module {
     private BlockPos findBestChest(String itemId) {
         BlockPos bestPos = null;
         int maxCount = -1;
-
         BlockPos playerPos = mc.player.blockPosition();
         double rangeSq = Math.pow(range.getValue(), 2);
-
         for (Map.Entry<String, Map<String, Integer>> entry : chestCache.entrySet()) {
             String posStr = entry.getKey();
             Map<String, Integer> contents = entry.getValue();
-
             if (contents.containsKey(itemId)) {
                 BlockPos pos = CacheUtils.stringToPos(posStr);
                 if (pos.distSqr(playerPos) > rangeSq) continue;
-
                 int count = contents.get(itemId);
                 if (count > maxCount) {
                     maxCount = count;
@@ -312,26 +245,17 @@ public class AutoStash extends Module {
     private void performStash() {
         AbstractContainerMenu menu = mc.player.containerMenu;
         int containerSlots = menu.slots.size() - 36;
-
         if (containerSlots <= 0) {
             currentState = State.CLOSING_AFTER_STASH;
             return;
         }
-
         List<Integer> slotsToMove = currentStashEntry.getValue();
         int limit = itemsPerTick.getInt();
         int moves = 0;
-
         Iterator<Integer> it = slotsToMove.iterator();
         while (it.hasNext() && moves < limit) {
             int invSlotIndex = it.next();
-            int menuSlotId;
-            if (invSlotIndex < 9) {
-                menuSlotId = containerSlots + 27 + invSlotIndex;
-            } else {
-                menuSlotId = containerSlots + (invSlotIndex - 9);
-            }
-
+            int menuSlotId = (invSlotIndex < 9) ? containerSlots + 27 + invSlotIndex : containerSlots + (invSlotIndex - 9);
             Slot slot = menu.getSlot(menuSlotId);
             if (slot.hasItem()) {
                 sendQuickMovePacket(menu, menuSlotId);
@@ -339,30 +263,18 @@ public class AutoStash extends Module {
             }
             it.remove();
         }
-
         if (slotsToMove.isEmpty()) {
-            // [CHANGE] Cập nhật Cache ngay lập tức sau khi cất xong
             updateCurrentContainerToCache();
             currentState = State.CLOSING_AFTER_STASH;
         }
     }
 
-    // ============================================================================================
-    // COMMON HELPERS & UPDATE LOGIC
-    // ============================================================================================
-
-    /**
-     * Helper mới: Quét container đang mở và cập nhật vào Cache (RAM + Disk).
-     * Được gọi khi Rebuild Cache HOẶC khi vừa stash xong.
-     */
     private void updateCurrentContainerToCache() {
         if (currentTarget == null || mc.player == null) return;
         AbstractContainerMenu menu = mc.player.containerMenu;
         int containerSlots = menu.slots.size() - 36;
-
         if (containerSlots > 0) {
             Map<String, Integer> contents = new HashMap<>();
-
             for (int i = 0; i < containerSlots; i++) {
                 ItemStack stack = menu.getSlot(i).getItem();
                 if (!stack.isEmpty()) {
@@ -370,12 +282,12 @@ public class AutoStash extends Module {
                     contents.put(itemId, contents.getOrDefault(itemId, 0) + stack.getCount());
                 }
             }
-
-            // 1. Cập nhật Memory Cache
             String posKey = CacheUtils.posToString(currentTarget);
             chestCache.put(posKey, contents);
 
-            // 2. Cập nhật Disk Cache (chỉ cập nhật đúng entry này để tối ưu)
+            // [UPDATE] Bật cờ dirty để GUI biết cần cập nhật
+            cacheDirty = true;
+
             Path cacheFile = CacheUtils.getCacheFilePath(mc, "autostash");
             CacheUtils.updateSpecificJsonObject(cacheFile, posKey, contents);
         }
@@ -383,15 +295,12 @@ public class AutoStash extends Module {
 
     private void openTargetSilent() {
         if (currentTarget == null) return;
-
         Vec3 center = Vec3.atCenterOf(currentTarget);
         BlockHitResult hitResult = new BlockHitResult(center, Direction.UP, currentTarget, false);
-
         containerReady = false;
         silentContainerId = -1;
         mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult);
         mc.player.swing(InteractionHand.MAIN_HAND);
-
         currentState = (currentState == State.OPENING_FOR_SCAN) ? State.WAITING_FOR_SCAN_OPEN : State.WAITING_FOR_STASH_OPEN;
         waitTimer = 20;
     }
@@ -403,11 +312,8 @@ public class AutoStash extends Module {
         }
         waitTimer--;
         if (waitTimer <= 0) {
-            if (currentState == State.WAITING_FOR_SCAN_OPEN) {
-                currentState = State.SCANNING_WORLD;
-            } else {
-                currentState = State.CLOSING_AFTER_STASH;
-            }
+            if (currentState == State.WAITING_FOR_SCAN_OPEN) currentState = State.SCANNING_WORLD;
+            else currentState = State.CLOSING_AFTER_STASH;
         }
     }
 
@@ -415,44 +321,24 @@ public class AutoStash extends Module {
         sendClosePacket();
         silentContainerId = -1;
         containerReady = false;
-
-        if (nextState == State.OPENING_FOR_STASH) {
-            moveToNextStashTarget();
-        } else {
-            currentState = nextState;
-        }
+        if (nextState == State.OPENING_FOR_STASH) moveToNextStashTarget();
+        else currentState = nextState;
     }
 
     private void sendMessage(String message) {
-        if (mc.player != null) {
-            mc.player.displayClientMessage(Component.literal("§b[AutoStash] §r" + message), false);
-        }
+        if (mc.player != null) mc.player.displayClientMessage(Component.literal("§b[AutoStash] §r" + message), false);
     }
-
-    private boolean isValidContainer(BlockEntity be) {
-        return be instanceof ChestBlockEntity ||
-                be instanceof BarrelBlockEntity ||
-                be instanceof ShulkerBoxBlockEntity;
-    }
-
+    private boolean isValidContainer(BlockEntity be) { return be instanceof ChestBlockEntity || be instanceof BarrelBlockEntity || be instanceof ShulkerBoxBlockEntity; }
     private boolean isDuplicateDoubleChest(BlockEntity be) {
         if (be instanceof ChestBlockEntity) {
             net.minecraft.world.level.block.state.BlockState state = be.getBlockState();
-            if (state.hasProperty(ChestBlock.TYPE)) {
-                return state.getValue(ChestBlock.TYPE) == ChestType.LEFT;
-            }
+            if (state.hasProperty(ChestBlock.TYPE)) return state.getValue(ChestBlock.TYPE) == ChestType.LEFT;
         }
         return false;
     }
-
     private void sendQuickMovePacket(AbstractContainerMenu menu, int slotId) {
-        mc.player.connection.send(new ServerboundContainerClickPacket(
-                menu.containerId, menu.getStateId(), slotId, 0, ClickType.QUICK_MOVE,
-                menu.getSlot(slotId).getItem().copy(),
-                new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>()
-        ));
+        mc.player.connection.send(new ServerboundContainerClickPacket(menu.containerId, menu.getStateId(), slotId, 0, ClickType.QUICK_MOVE, menu.getSlot(slotId).getItem().copy(), new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>()));
     }
-
     private void sendClosePacket() {
         if (mc.player != null && mc.player.containerMenu != mc.player.inventoryMenu) {
             mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));

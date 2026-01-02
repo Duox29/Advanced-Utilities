@@ -380,6 +380,7 @@ public class StorageManager extends Module {
                 } else {
                     chestContents.put(itemId, newAmount);
                 }
+                AutoStash.cacheDirty = true;
             }
         }
     }
