@@ -3,6 +3,7 @@ package com.duox.advancedutilities.gui;
 import com.duox.advancedutilities.modules.AutoStash;
 import com.duox.advancedutilities.modules.StorageManager;
 import com.duox.advancedutilities.system.ModuleManager;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -11,34 +12,49 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
 
+import java.awt.Color;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class StorageScreen extends Screen {
+    // --- COLORS (AE2 Style) ---
+    private static final int COLOR_BG = 0xFFC6C6C6; // Main GUI grey (Vanilla/AE2-ish)
+    private static final int COLOR_WINDOW_BG = 0xFFFFFFFF; // White tint for window
+    private static final int COLOR_SLOT_BG = 0xFF8B8B8B; // Darker slot background
+    private static final int COLOR_SLOT_HIGHLIGHT = 0x80FFFFFF;
+    private static final int COLOR_TEXT = 0xFF404040;
+
+    // --- DIMENSIONS ---
+    private int guiLeft;
+    private int guiTop;
+    private static final int GUI_WIDTH = 196;  // Wider for scrollbar
+    private static final int GUI_HEIGHT = 222; // Taller for more rows
+
+    private static final int SLOT_SIZE = 18;
+    private static final int GRID_COLS = 9;
+    private static final int GRID_ROWS = 9; // Show more rows (Terminal style)
+    private static final int GRID_X_OFFSET = 9;
+    private static final int GRID_Y_OFFSET = 18 + 18; // Title + Search bar space
+
+    // --- LOGIC ---
     private final StorageManager storageManager;
     private EditBox searchBox;
-    private Button takeButton;
+    private Button requestButton;
     private Button autoStashButton;
 
-    // Flag để kiểm soát việc tắt module khi đóng GUI
     private boolean keepModuleOn = false;
-
-    // Grid Logic
     private List<ItemEntry> allItems = new ArrayList<>();
     private List<ItemEntry> filteredItems = new ArrayList<>();
 
-    private int scrollOffset = 0;
-    private static final int GRID_COLS = 9;
-    private static final int SLOT_SIZE = 18;
-    private static final int GRID_GAP = 2;
-    private static final int GRID_START_X = 20;
-    private static final int GRID_START_Y = 40;
-    private static final int ROWS_VISIBLE = 8;
+    // Scrolling
+    private float scrollPosition = 0.0f;
+    private boolean isScrolling = false;
 
     private static class ItemEntry {
         ItemStack stack;
@@ -49,77 +65,277 @@ public class StorageScreen extends Screen {
             this.id = id;
             this.totalCount = count;
             Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(id));
-            if (item == Items.AIR && !id.equals("minecraft:air")) {
-                // Fallback
-            }
             this.stack = new ItemStack(item);
         }
     }
 
     public StorageScreen(StorageManager manager) {
-        super(Component.literal("Storage Management"));
+        super(Component.literal("ME Terminal Access"));
         this.storageManager = manager;
     }
 
     @Override
     protected void init() {
         super.init();
-
-        // Reset flag mỗi khi init lại GUI
         this.keepModuleOn = false;
 
-        int searchWidth = 200;
-        this.searchBox = new EditBox(this.font, this.width / 2 - searchWidth / 2, 10, searchWidth, 20, Component.literal("Search"));
+        // Calculate center
+        this.guiLeft = (this.width - GUI_WIDTH) / 2;
+        this.guiTop = (this.height - GUI_HEIGHT) / 2;
+
+        // Search Bar (Placed at top right of the container)
+        int searchW = 90;
+        this.searchBox = new EditBox(this.font, guiLeft + GUI_WIDTH - searchW - 25, guiTop + 6, searchW, 12, Component.literal("Search"));
         this.searchBox.setMaxLength(50);
+        this.searchBox.setBordered(false); // We draw our own border to look like AE2
+        this.searchBox.setTextColor(0xFFFFFFFF);
         this.searchBox.setResponder(this::onSearchChanged);
         this.addWidget(this.searchBox);
 
-        // Buttons
-        this.takeButton = Button.builder(Component.literal("Take Items"), button -> {
+        // Request Button (Replacing "Take Items") - Styled as a "Terminal Action"
+        this.requestButton = Button.builder(Component.literal("Request"), button -> {
             if (!storageManager.isEnabled()) {
                 storageManager.setEnabled(true);
             }
-            // Logic: Khi bấm Take Items, ta muốn module tiếp tục chạy ngầm để lấy đồ
             storageManager.startRetrieval();
-
-            // Đánh dấu là giữ module bật
             this.keepModuleOn = true;
-
-            // Đóng GUI
             Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
-            //this.onClose();
-        }).bounds(this.width - 110, this.height - 30, 100, 20).build();
-        this.addRenderableWidget(takeButton);
+        }).bounds(guiLeft + 7, guiTop + GUI_HEIGHT - 26, 80, 20).build();
+        this.addRenderableWidget(requestButton);
 
+        // AutoStash Toggle
         this.autoStashButton = Button.builder(Component.literal("AutoStash"), button -> {
             AutoStash stash = ModuleManager.INSTANCE.getModule(AutoStash.class);
             if (stash != null) {
                 stash.setEnabled(!stash.isEnabled());
+                updateButtonState();
             }
-        }).bounds(10, this.height - 30, 100, 20).build();
+        }).bounds(guiLeft + GUI_WIDTH - 87, guiTop + GUI_HEIGHT - 26, 80, 20).build();
         this.addRenderableWidget(autoStashButton);
 
         refreshItemList();
+        updateButtonState();
+    }
+
+    private void updateButtonState() {
+        AutoStash stash = ModuleManager.INSTANCE.getModule(AutoStash.class);
+        if (stash != null && this.autoStashButton != null) {
+            if (stash.isEnabled()) {
+                this.autoStashButton.setMessage(Component.literal("§aAutoStash: ON"));
+            } else {
+                this.autoStashButton.setMessage(Component.literal("§cAutoStash: OFF"));
+            }
+        }
     }
 
     @Override
     public void onClose() {
-        // Nếu không có cờ keepModuleOn (nghĩa là người dùng bấm ESC hoặc đóng GUI mà không bấm Take Items)
-        // Thì ta phải tắt StorageManager để Mixin không chặn GUI của rương nữa.
         if (!keepModuleOn) {
-            storageManager.clearRequestQueue(); // Xóa queue nếu hủy
+            storageManager.clearRequestQueue();
             storageManager.setEnabled(false);
         }
-
         super.onClose();
     }
 
-    // --- Các phần code bên dưới giữ nguyên ---
+    // --- RENDER ---
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(graphics); // Dark background for the whole screen
+
+        // 1. Draw Main GUI Panel (AE2 Style Background)
+        // Background Base
+        graphics.fill(guiLeft, guiTop, guiLeft + GUI_WIDTH, guiTop + GUI_HEIGHT, 0xFF212121); // Dark Grey Base
+        // Borders (Lighter Grey)
+        graphics.renderOutline(guiLeft, guiTop, GUI_WIDTH, GUI_HEIGHT, 0xFF585858);
+
+        // 2. Draw Slot Grid Background
+        for (int row = 0; row < GRID_ROWS; row++) {
+            for (int col = 0; col < GRID_COLS; col++) {
+                int x = guiLeft + GRID_X_OFFSET + col * SLOT_SIZE;
+                int y = guiTop + GRID_Y_OFFSET + row * SLOT_SIZE;
+
+                // Draw Slot Background
+                graphics.fill(x, y, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, 0xFF353535); // Darker slot
+
+                // Optional: Draw faint border for each slot
+                // graphics.renderOutline(x, y, SLOT_SIZE, SLOT_SIZE, 0xFF2A2A2A);
+            }
+        }
+
+        // 3. Draw Search Box Background (AE2 Style Input Field)
+        int searchX = searchBox.getX() - 4;
+        int searchY = searchBox.getY() - 2;
+        graphics.fill(searchX, searchY, searchX + searchBox.getWidth() + 8, searchY + 16, 0xFF000000); // Black background
+        graphics.renderOutline(searchX, searchY, searchBox.getWidth() + 8, 16, 0xFF585858); // Grey border
+
+        // 4. Render Scrollbar
+        renderScrollbar(graphics, mouseX, mouseY);
+
+        // 5. Render Title
+        graphics.drawString(this.font, this.title, guiLeft + 8, guiTop + 8, 0xFFE0E0E0, false);
+
+        // 6. Draw Items
+        int totalRows = (int) Math.ceil((double) filteredItems.size() / GRID_COLS);
+        int startIndex = (int) (scrollPosition * Math.max(0, totalRows - GRID_ROWS)) * GRID_COLS;
+        int endIndex = Math.min(startIndex + (GRID_ROWS * GRID_COLS), filteredItems.size());
+
+        for (int i = startIndex; i < endIndex; i++) {
+            ItemEntry entry = filteredItems.get(i);
+            int relIndex = i - startIndex;
+            int col = relIndex % GRID_COLS;
+            int row = relIndex / GRID_COLS;
+
+            int x = guiLeft + GRID_X_OFFSET + col * SLOT_SIZE;
+            int y = guiTop + GRID_Y_OFFSET + row * SLOT_SIZE;
+
+            // Highlight if hovered
+            boolean isHovered = mouseX >= x && mouseX < x + SLOT_SIZE && mouseY >= y && mouseY < y + SLOT_SIZE;
+            if (isHovered) {
+                graphics.fill(x, y, x + SLOT_SIZE - 1, y + SLOT_SIZE - 1, COLOR_SLOT_HIGHLIGHT);
+            }
+
+            // Draw Item
+            graphics.renderItem(entry.stack, x + 1, y + 1);
+            // Draw Count (Custom compact format)
+            graphics.renderItemDecorations(this.font, entry.stack, x + 1, y + 1, shortenedCount(entry.totalCount));
+
+            // Draw Requested Overlay (If item is in queue)
+            int queued = storageManager.getRequestQueue().getOrDefault(entry.id, 0);
+            if (queued > 0) {
+                // Green overlay or border to show it's requested
+                graphics.renderOutline(x, y, SLOT_SIZE -1, SLOT_SIZE -1, 0xFF00FF00);
+            }
+
+            // Tooltip
+            if (isHovered) {
+                List<Component> tooltip = getTooltipFromItem(this.minecraft, entry.stack);
+                tooltip.add(Component.literal("§7Stored: §f" + entry.totalCount));
+                if (queued > 0) {
+                    tooltip.add(Component.literal("§eRequesting: " + queued));
+                }
+                tooltip.add(Component.literal("§8[L-Click: +64 | R-Click: +1 | Shift: Remove]"));
+
+                // Render tooltip last (defer to super or do it here)
+                // Note: We usually render tooltips at the very end of the method
+                graphics.renderTooltip(this.font, tooltip, entry.stack.getTooltipImage(), mouseX, mouseY);
+            }
+        }
+
+        // Render Widgets (Buttons, EditBox)
+        super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private void renderScrollbar(GuiGraphics graphics, int mouseX, int mouseY) {
+        int scrollBarX = guiLeft + GUI_WIDTH - 16;
+        int scrollBarY = guiTop + GRID_Y_OFFSET;
+        int scrollBarHeight = GRID_ROWS * SLOT_SIZE;
+
+        // Track Background
+        graphics.fill(scrollBarX, scrollBarY, scrollBarX + 10, scrollBarY + scrollBarHeight, 0xFF2A2A2A);
+
+        // Thumb
+        int totalRows = (int) Math.ceil((double) filteredItems.size() / GRID_COLS);
+        int visibleRows = GRID_ROWS;
+
+        if (totalRows > visibleRows) {
+            int thumbHeight = (int) ((float) (visibleRows * visibleRows) / totalRows * SLOT_SIZE);
+            if (thumbHeight < 32) thumbHeight = 32;
+            if (thumbHeight > scrollBarHeight) thumbHeight = scrollBarHeight;
+
+            int thumbY = scrollBarY + (int) ((scrollBarHeight - thumbHeight) * scrollPosition);
+
+            // Draw Thumb
+            graphics.fill(scrollBarX + 1, thumbY, scrollBarX + 9, thumbY + thumbHeight, 0xFF585858);
+            graphics.renderOutline(scrollBarX + 1, thumbY, 8, thumbHeight, 0xFF808080);
+        } else {
+            // Disabled scrollbar
+            graphics.fill(scrollBarX + 1, scrollBarY, scrollBarX + 9, scrollBarY + scrollBarHeight, 0xFF353535);
+        }
+    }
+
+    // --- INPUT HANDLING ---
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        // Scroll Logic
+        int totalRows = (int) Math.ceil((double) filteredItems.size() / GRID_COLS);
+        if (totalRows <= GRID_ROWS) return false;
+
+        float scrollStep = 1.0f / (totalRows - GRID_ROWS);
+        if (delta > 0) {
+            scrollPosition -= scrollStep;
+        } else if (delta < 0) {
+            scrollPosition += scrollStep;
+        }
+        scrollPosition = Mth.clamp(scrollPosition, 0.0f, 1.0f);
+        return true;
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+
+        // Grid Click Logic
+        int startX = guiLeft + GRID_X_OFFSET;
+        int startY = guiTop + GRID_Y_OFFSET;
+
+        // Check bounds first to avoid clicking outside grid
+        if (mouseX < startX || mouseX > startX + (GRID_COLS * SLOT_SIZE) ||
+                mouseY < startY || mouseY > startY + (GRID_ROWS * SLOT_SIZE)) {
+            return false;
+        }
+
+        int totalRows = (int) Math.ceil((double) filteredItems.size() / GRID_COLS);
+        int startRow = (int) (scrollPosition * Math.max(0, totalRows - GRID_ROWS));
+
+        int clickedCol = (int) ((mouseX - startX) / SLOT_SIZE);
+        int clickedRow = (int) ((mouseY - startY) / SLOT_SIZE);
+
+        int index = (startRow + clickedRow) * GRID_COLS + clickedCol;
+
+        if (index >= 0 && index < filteredItems.size()) {
+            ItemEntry entry = filteredItems.get(index);
+            handleClick(entry, button);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void handleClick(ItemEntry entry, int button) {
+        int change = 0;
+        // AE2 Style Logic:
+        // Left Click: Request Stack (64)
+        // Right Click: Request 1
+        // Shift + Click: Remove/Reduce
+
+        boolean isShift = Screen.hasShiftDown();
+
+        if (button == 0) change = 64; // Left
+        if (button == 1) change = 1;  // Right
+
+        if (isShift) change = -change; // Shift turns add into remove
+
+        int current = storageManager.getRequestQueue().getOrDefault(entry.id, 0);
+        int target = current + change;
+
+        if (target < 0) target = 0;
+        if (target > entry.totalCount) target = entry.totalCount;
+
+        if (target == 0) {
+            storageManager.getRequestQueue().remove(entry.id);
+        } else {
+            storageManager.getRequestQueue().put(entry.id, target);
+        }
+        Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+    }
+
+    // --- UTILS ---
 
     private void refreshItemList() {
         allItems.clear();
         Map<String, Map<String, Integer>> cache = AutoStash.getChestCache();
-
         Map<String, Integer> totals = new HashMap<>();
 
         for (Map<String, Integer> contents : cache.values()) {
@@ -127,14 +343,11 @@ public class StorageScreen extends Screen {
                 totals.put(entry.getKey(), totals.getOrDefault(entry.getKey(), 0) + entry.getValue());
             }
         }
-
         for (Map.Entry<String, Integer> entry : totals.entrySet()) {
             allItems.add(new ItemEntry(entry.getKey(), entry.getValue()));
         }
-
         // Sort by count desc
         allItems.sort((a, b) -> Integer.compare(b.totalCount, a.totalCount));
-
         filterItems();
     }
 
@@ -147,139 +360,18 @@ public class StorageScreen extends Screen {
                     .filter(e -> e.stack.getHoverName().getString().toLowerCase().contains(query) || e.id.contains(query))
                     .collect(Collectors.toList());
         }
-        // Clamp scroll
-        int maxRow = (int) Math.ceil((double) filteredItems.size() / GRID_COLS);
-        int maxScroll = Math.max(0, maxRow - ROWS_VISIBLE);
-        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+        // Reset scroll when filter changes
+        scrollPosition = 0.0f;
     }
 
     private void onSearchChanged(String text) {
         filterItems();
     }
 
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-
-        // Draw Search Box
-        this.searchBox.render(graphics, mouseX, mouseY, partialTick);
-
-        // Draw Grid Background
-        int gridWidth = GRID_COLS * (SLOT_SIZE + GRID_GAP);
-        int gridHeight = ROWS_VISIBLE * (SLOT_SIZE + GRID_GAP);
-        int startX = (this.width - gridWidth) / 2;
-        int startY = 40;
-
-        graphics.fill(startX - 2, startY - 2, startX + gridWidth, startY + gridHeight, 0x80000000);
-
-        // Draw Items
-        int startIndex = scrollOffset * GRID_COLS;
-        int endIndex = Math.min(startIndex + (ROWS_VISIBLE * GRID_COLS), filteredItems.size());
-
-        for (int i = startIndex; i < endIndex; i++) {
-            ItemEntry entry = filteredItems.get(i);
-            int relIndex = i - startIndex;
-            int col = relIndex % GRID_COLS;
-            int row = relIndex / GRID_COLS;
-
-            int x = startX + col * (SLOT_SIZE + GRID_GAP);
-            int y = startY + row * (SLOT_SIZE + GRID_GAP);
-
-            // Draw Item
-            graphics.renderItem(entry.stack, x + 1, y + 1);
-            graphics.renderItemDecorations(this.font, entry.stack, x + 1, y + 1, shortenedCount(entry.totalCount));
-
-            // Hover highlight
-            if (mouseX >= x && mouseX < x + SLOT_SIZE && mouseY >= y && mouseY < y + SLOT_SIZE) {
-                graphics.fill(x, y, x + SLOT_SIZE, y + SLOT_SIZE, 0x80FFFFFF);
-
-                // Tooltip
-                List<Component> tooltip = getTooltipFromItem(this.minecraft, entry.stack);
-                tooltip.add(Component.literal("Total: " + entry.totalCount).withStyle(net.minecraft.ChatFormatting.GRAY));
-
-                // Show currently queued amount
-                int queued = storageManager.getRequestQueue().getOrDefault(entry.id, 0);
-                if (queued > 0) {
-                    tooltip.add(Component.literal("Queued: " + queued).withStyle(net.minecraft.ChatFormatting.YELLOW));
-                }
-
-                graphics.renderTooltip(this.font, tooltip, entry.stack.getTooltipImage(), mouseX, mouseY);
-            }
-        }
-
-        super.render(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 5, 0xFFFFFF);
-    }
-
     private String shortenedCount(int count) {
         if (count >= 1000000) return String.format("%.1fM", count / 1000000.0);
-        if (count >= 1000) return String.format("%.1fK", count / 1000.0);
+        if (count >= 1000) return String.format("%.1fk", count / 1000.0);
         return String.valueOf(count);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
-
-        // Grid Click
-        int gridWidth = GRID_COLS * (SLOT_SIZE + GRID_GAP);
-        int startX = (this.width - gridWidth) / 2;
-        int startY = 40;
-
-        int startIndex = scrollOffset * GRID_COLS;
-        int endIndex = Math.min(startIndex + (ROWS_VISIBLE * GRID_COLS), filteredItems.size());
-
-        for (int i = startIndex; i < endIndex; i++) {
-            int relIndex = i - startIndex;
-            int col = relIndex % GRID_COLS;
-            int row = relIndex / GRID_COLS;
-
-            int x = startX + col * (SLOT_SIZE + GRID_GAP);
-            int y = startY + row * (SLOT_SIZE + GRID_GAP);
-
-            if (mouseX >= x && mouseX < x + SLOT_SIZE && mouseY >= y && mouseY < y + SLOT_SIZE) {
-                ItemEntry entry = filteredItems.get(i);
-
-                int change = 0;
-                if (button == 0) change = 64; // Left
-                if (button == 1) change = 1;  // Right
-
-                if (Screen.hasShiftDown()) change = -change;
-
-                int current = storageManager.getRequestQueue().getOrDefault(entry.id, 0);
-                int target = current + change;
-                if (target < 0) target = 0;
-                if (target > entry.totalCount) target = entry.totalCount;
-
-                if (target == 0) {
-                    storageManager.getRequestQueue().remove(entry.id);
-                } else {
-                    storageManager.getRequestQueue().put(entry.id, target);
-                }
-
-                Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (delta > 0) {
-            scrollOffset--;
-        } else if (delta < 0) {
-            scrollOffset++;
-        }
-
-        int maxRow = (int) Math.ceil((double) filteredItems.size() / GRID_COLS);
-        int maxScroll = Math.max(0, maxRow - ROWS_VISIBLE);
-
-        if (scrollOffset < 0) scrollOffset = 0;
-        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
-
-        return true;
     }
 
     @Override
