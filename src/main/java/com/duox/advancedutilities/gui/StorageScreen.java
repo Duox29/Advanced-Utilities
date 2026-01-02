@@ -3,7 +3,6 @@ package com.duox.advancedutilities.gui;
 import com.duox.advancedutilities.modules.AutoStash;
 import com.duox.advancedutilities.modules.StorageManager;
 import com.duox.advancedutilities.system.ModuleManager;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -25,6 +24,9 @@ public class StorageScreen extends Screen {
     private EditBox searchBox;
     private Button takeButton;
     private Button autoStashButton;
+
+    // Flag để kiểm soát việc tắt module khi đóng GUI
+    private boolean keepModuleOn = false;
 
     // Grid Logic
     private List<ItemEntry> allItems = new ArrayList<>();
@@ -48,7 +50,7 @@ public class StorageScreen extends Screen {
             this.totalCount = count;
             Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(id));
             if (item == Items.AIR && !id.equals("minecraft:air")) {
-                 // Fallback
+                // Fallback
             }
             this.stack = new ItemStack(item);
         }
@@ -63,6 +65,9 @@ public class StorageScreen extends Screen {
     protected void init() {
         super.init();
 
+        // Reset flag mỗi khi init lại GUI
+        this.keepModuleOn = false;
+
         int searchWidth = 200;
         this.searchBox = new EditBox(this.font, this.width / 2 - searchWidth / 2, 10, searchWidth, 20, Component.literal("Search"));
         this.searchBox.setMaxLength(50);
@@ -71,13 +76,22 @@ public class StorageScreen extends Screen {
 
         // Buttons
         this.takeButton = Button.builder(Component.literal("Take Items"), button -> {
+            if (!storageManager.isEnabled()) {
+                storageManager.setEnabled(true);
+            }
+            // Logic: Khi bấm Take Items, ta muốn module tiếp tục chạy ngầm để lấy đồ
             storageManager.startRetrieval();
-            this.onClose();
+
+            // Đánh dấu là giữ module bật
+            this.keepModuleOn = true;
+
+            // Đóng GUI
+            Minecraft.getInstance().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            //this.onClose();
         }).bounds(this.width - 110, this.height - 30, 100, 20).build();
         this.addRenderableWidget(takeButton);
 
         this.autoStashButton = Button.builder(Component.literal("AutoStash"), button -> {
-            // Trigger AutoStash without closing GUI
             AutoStash stash = ModuleManager.INSTANCE.getModule(AutoStash.class);
             if (stash != null) {
                 stash.setEnabled(!stash.isEnabled());
@@ -87,6 +101,20 @@ public class StorageScreen extends Screen {
 
         refreshItemList();
     }
+
+    @Override
+    public void onClose() {
+        // Nếu không có cờ keepModuleOn (nghĩa là người dùng bấm ESC hoặc đóng GUI mà không bấm Take Items)
+        // Thì ta phải tắt StorageManager để Mixin không chặn GUI của rương nữa.
+        if (!keepModuleOn) {
+            storageManager.clearRequestQueue(); // Xóa queue nếu hủy
+            storageManager.setEnabled(false);
+        }
+
+        super.onClose();
+    }
+
+    // --- Các phần code bên dưới giữ nguyên ---
 
     private void refreshItemList() {
         allItems.clear();
@@ -172,7 +200,7 @@ public class StorageScreen extends Screen {
                 // Show currently queued amount
                 int queued = storageManager.getRequestQueue().getOrDefault(entry.id, 0);
                 if (queued > 0) {
-                     tooltip.add(Component.literal("Queued: " + queued).withStyle(net.minecraft.ChatFormatting.YELLOW));
+                    tooltip.add(Component.literal("Queued: " + queued).withStyle(net.minecraft.ChatFormatting.YELLOW));
                 }
 
                 graphics.renderTooltip(this.font, tooltip, entry.stack.getTooltipImage(), mouseX, mouseY);

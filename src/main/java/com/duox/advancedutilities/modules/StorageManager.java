@@ -4,6 +4,7 @@ import com.duox.advancedutilities.gui.StorageScreen;
 import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.utils.CacheUtils;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap; // Đảm bảo import này có sẵn hoặc dùng HashMap thường
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -14,6 +15,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -59,7 +61,6 @@ public class StorageManager extends Module {
         } else {
             // Otherwise just open the GUI
             mc.setScreen(new StorageScreen(this));
-            // We keep it enabled to process tasks if any, or it will be disabled by GUI if needed
         }
     }
 
@@ -92,9 +93,6 @@ public class StorageManager extends Module {
                 closeSilent();
                 break;
             case IDLE:
-                // If the user closed the GUI but we have things to do?
-                // Currently onEnable triggers GUI or Retrieval.
-                // If GUI adds items, it calls startRetrieval which sets state to PLANNING.
                 break;
         }
     }
@@ -137,18 +135,39 @@ public class StorageManager extends Module {
         retrievalPlan.clear();
         Map<String, Map<String, Integer>> cache = AutoStash.getChestCache();
 
+        if (requestQueue.isEmpty()) {
+            currentState = State.IDLE;
+            this.setEnabled(false);
+            return;
+        }
         // Clone request queue to track remaining needs
         Map<String, Integer> remainingNeeds = new HashMap<>(requestQueue);
-
+        requestQueue.clear();
         BlockPos playerPos = mc.player.blockPosition();
 
-        // Simple greedy approach: Find closest chest with needed item
-        // Get all chests, sort by distance
+        // Get all chests
         List<String> sortedChests = new ArrayList<>(cache.keySet());
-        sortedChests.sort(Comparator.comparingDouble(s -> {
-            BlockPos p = stringToPos(s);
-            return p.distSqr(playerPos);
-        }));
+
+        // CUSTOM SORT: Prioritize chests with LESS items (cleaning up junk) then Distance
+        sortedChests.sort((s1, s2) -> {
+            Map<String, Integer> c1Contents = cache.get(s1);
+            Map<String, Integer> c2Contents = cache.get(s2);
+
+            // Calculate "Relevance Score" -> The quantity of the needed item in the chest.
+            // We want the chest where the needed item count is SMALLEST (but > 0).
+            int score1 = getMinRelevantQuantity(c1Contents, remainingNeeds);
+            int score2 = getMinRelevantQuantity(c2Contents, remainingNeeds);
+
+            // If one chest doesn't have what we need, push it to end (MAX_VALUE)
+            if (score1 != score2) {
+                return Integer.compare(score1, score2);
+            }
+
+            // Tie-break with distance
+            BlockPos p1 = stringToPos(s1);
+            BlockPos p2 = stringToPos(s2);
+            return Double.compare(p1.distSqr(playerPos), p2.distSqr(playerPos));
+        });
 
         for (String chestPosStr : sortedChests) {
             Map<String, Integer> contents = cache.get(chestPosStr);
@@ -183,14 +202,34 @@ public class StorageManager extends Module {
 
         if (retrievalPlan.isEmpty()) {
             sendMessage("Could not find any items to retrieve.");
-            currentState = State.IDLE;
-            requestQueue.clear(); // Clear queue as we failed or done
-            this.setEnabled(false); // Disable module
-            return;
+            // Kiểm tra xem user có add thêm gì mới vào queue trong lúc tính toán không
+            if (requestQueue.isEmpty()) {
+                currentState = State.IDLE;
+                this.setEnabled(false);
+            } else {
+                // Nếu có queue mới, tính toán lại ngay
+                calculateRetrievalPlan();
+            }
         }
 
         retrievalIterator = retrievalPlan.entrySet().iterator();
         moveToNextTarget();
+    }
+
+    private int getMinRelevantQuantity(Map<String, Integer> chestContents, Map<String, Integer> needs) {
+        int minQty = Integer.MAX_VALUE;
+        boolean foundAny = false;
+
+        for (String neededItem : needs.keySet()) {
+            if (chestContents.containsKey(neededItem)) {
+                int qty = chestContents.get(neededItem);
+                if (qty < minQty) {
+                    minQty = qty;
+                }
+                foundAny = true;
+            }
+        }
+        return foundAny ? minQty : Integer.MAX_VALUE;
     }
 
     private void moveToNextTarget() {
@@ -200,9 +239,14 @@ public class StorageManager extends Module {
             currentState = State.OPENING_CHEST;
         } else {
             sendMessage("Retrieval complete.");
-            requestQueue.clear();
-            currentState = State.IDLE;
-            this.setEnabled(false);
+            if (!requestQueue.isEmpty()) {
+                // Nếu có item mới trong hàng đợi, quay lại bước Lập Kế Hoạch ngay lập tức
+                currentState = State.PLANNING;
+            } else {
+                // Nếu không còn gì để làm, mới tắt module
+                currentState = State.IDLE;
+                this.setEnabled(false);
+            }
         }
     }
 
@@ -228,7 +272,6 @@ public class StorageManager extends Module {
         }
         waitTimer--;
         if (waitTimer <= 0) {
-            // Timeout
             sendMessage("Timeout opening chest at " + currentTarget);
             currentState = State.CLOSING_CHEST;
         }
@@ -238,12 +281,14 @@ public class StorageManager extends Module {
         this.silentContainerId = containerId;
         this.containerReady = true;
     }
+
     public boolean isSilentMode() {
         return this.isEnabled();
     }
+
     private void performWithdrawal() {
         AbstractContainerMenu menu = mc.player.containerMenu;
-        int containerSlots = menu.slots.size() - 36;
+        int containerSlots = menu.slots.size() - 36; // inventory always last 36 slots
 
         if (containerSlots <= 0) {
             currentState = State.CLOSING_CHEST;
@@ -253,6 +298,7 @@ public class StorageManager extends Module {
         Map<String, Integer> itemsToTake = currentTargetEntry.getValue();
 
         // Iterate through chest slots
+        // Note: Iterating backwards might be safer if we are modifying slots, but here strict indexing is fine
         for (int i = 0; i < containerSlots; i++) {
             ItemStack stack = menu.getSlot(i).getItem();
             if (stack.isEmpty()) continue;
@@ -264,16 +310,54 @@ public class StorageManager extends Module {
                 if (needed <= 0) continue;
 
                 int inSlot = stack.getCount();
+                int actualTaken = 0;
 
-                sendQuickMovePacket(menu, i);
+                if (inSlot <= needed) {
+                    // Take whole stack using Quick Move (Shift + Click)
+                    sendClickPacket(menu, i, 0, ClickType.QUICK_MOVE);
+                    actualTaken = inSlot;
+                } else {
+                    // Take PARTIAL stack
+                    // Logic: Pickup Stack -> Place 1 by 1 in player inv -> Return remainder
 
-                updateCache(itemId, inSlot);
-                // Decrement needed count (approximation)
-                itemsToTake.put(itemId, needed - inSlot);
+                    int targetSlot = findEmptyPlayerSlot(menu, containerSlots);
+                    if (targetSlot != -1) {
+                        // 1. Pickup source (Left Click)
+                        sendClickPacket(menu, i, 0, ClickType.PICKUP);
+
+                        // 2. Drop 'needed' items into player slot (Right Click = Place 1)
+                        // Be careful with packet spam here.
+                        for (int k = 0; k < needed; k++) {
+                            sendClickPacket(menu, targetSlot, 1, ClickType.PICKUP);
+                        }
+
+                        // 3. Return remainder to source (Left Click)
+                        sendClickPacket(menu, i, 0, ClickType.PICKUP);
+
+                        actualTaken = needed;
+                    } else {
+                        // No space in inventory for partial stack, skip or try quick move?
+                        // Let's fallback to Quick Move if full, though it violates quantity rule
+                        // sendMessage("Inventory full for split.");
+                        continue;
+                    }
+                }
+
+                updateCache(itemId, actualTaken);
+                itemsToTake.put(itemId, needed - actualTaken);
             }
         }
 
         currentState = State.CLOSING_CHEST;
+    }
+
+    private int findEmptyPlayerSlot(AbstractContainerMenu menu, int containerSlotsEnd) {
+        for (int i = containerSlotsEnd; i < menu.slots.size(); i++) {
+            if (menu.getSlot(i).getItem().isEmpty()) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void updateCache(String itemId, int amountTaken) {
@@ -282,10 +366,10 @@ public class StorageManager extends Module {
         String chestJsonKey = CacheUtils.posToString(currentTarget);
         Map<String, Map<String, Integer>> globalCache = AutoStash.getChestCache();
         if (globalCache.containsKey(chestJsonKey)) {
-            Map<String, Integer> chestContents =  globalCache.get(chestJsonKey);
+            Map<String, Integer> chestContents = globalCache.get(chestJsonKey);
 
-            if(chestContents.containsKey(itemId) && chestContents != null) {
-                int currentAmount =  chestContents.get(itemId);
+            if (chestContents != null && chestContents.containsKey(itemId)) {
+                int currentAmount = chestContents.get(itemId);
                 int newAmount = currentAmount - amountTaken;
 
                 if (newAmount <= 0) {
@@ -296,6 +380,7 @@ public class StorageManager extends Module {
             }
         }
     }
+
     private void closeSilent() {
         if (mc.player != null && mc.player.containerMenu != mc.player.inventoryMenu) {
             mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
@@ -307,11 +392,11 @@ public class StorageManager extends Module {
         moveToNextTarget();
     }
 
-    private void sendQuickMovePacket(AbstractContainerMenu menu, int slotId) {
+    private void sendClickPacket(AbstractContainerMenu menu, int slotId, int button, ClickType clickType) {
         mc.player.connection.send(new ServerboundContainerClickPacket(
-                menu.containerId, menu.getStateId(), slotId, 0, ClickType.QUICK_MOVE,
+                menu.containerId, menu.getStateId(), slotId, button, clickType,
                 menu.getSlot(slotId).getItem().copy(),
-                new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>()
+                new Int2ObjectOpenHashMap<>()
         ));
     }
 
