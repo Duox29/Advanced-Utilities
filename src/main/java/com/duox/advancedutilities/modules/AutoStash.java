@@ -91,6 +91,9 @@ public class AutoStash extends Module {
 
     @Override
     public void onEnable() {
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
         resetState();
         if (rebuildCache.getValue()) {
             startRebuildCache();
