@@ -155,7 +155,7 @@ public class AutoStash extends Module {
                 break;
 
             case CALCULATING_STASH:
-                // Logic is done in startSmartStash, but if we need to retry or something
+                // Logic is done in startSmartStash
                 break;
             case OPENING_FOR_STASH:
                 openTargetSilent();
@@ -187,7 +187,6 @@ public class AutoStash extends Module {
         BlockPos playerPos = mc.player.blockPosition();
         int r = range.getInt();
 
-        // Find all chests in range
         for (int x = -r; x <= r; x++) {
             for (int y = -r; y <= r; y++) {
                 for (int z = -r; z <= r; z++) {
@@ -201,15 +200,12 @@ public class AutoStash extends Module {
             }
         }
 
-        // Sort by distance
         scanQueue.sort(Comparator.comparingDouble(pos -> pos.distSqr(playerPos)));
-
         currentState = State.SCANNING_WORLD;
     }
 
     private void processScanQueue() {
         if (scanQueue.isEmpty()) {
-            // Done scanning
             Path cacheFile = CacheUtils.getCacheFilePath(mc,"autostash");
             CacheUtils.saveToJson(cacheFile, chestCache);
             rebuildCache.setValue(false);
@@ -219,36 +215,12 @@ public class AutoStash extends Module {
         }
 
         currentTarget = scanQueue.remove(0);
-        // Skip if we already visited this logical double chest part
-        // (Not strictly necessary if we key by pos, but good optimization)
-
         currentState = State.OPENING_FOR_SCAN;
     }
 
     private void scanContainerContents() {
-        AbstractContainerMenu menu = mc.player.containerMenu;
-        int containerSlots = menu.slots.size() - 36;
-
-        if (containerSlots > 0) {
-            Map<String, Integer> contents = new HashMap<>();
-
-            for (int i = 0; i < containerSlots; i++) {
-                ItemStack stack = menu.getSlot(i).getItem();
-                if (!stack.isEmpty()) {
-                    String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-                    contents.put(itemId, contents.getOrDefault(itemId, 0) + stack.getCount());
-                }
-            }
-
-            // Save to cache
-            String posKey =CacheUtils.posToString(currentTarget);
-            chestCache.put(posKey, contents);
-
-            // Handle double chests: Also map the other half to the same contents?
-            // Or just rely on scanning both halves. Scanning both halves is safer but redundant.
-            // For now, simple scan of every block is robust.
-        }
-
+        // Logic này được dùng khi Rebuild Cache
+        updateCurrentContainerToCache();
         currentState = State.CLOSING_AFTER_SCAN;
     }
 
@@ -261,6 +233,11 @@ public class AutoStash extends Module {
         Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
 
         Map<String, Map<String, Integer>> loaded = CacheUtils.loadFromJson(cacheFile, type);
+        // Load lại cache từ file vào bộ nhớ nếu cần thiết, hoặc dùng cache hiện tại
+        if (loaded != null && chestCache.isEmpty()) {
+            chestCache.putAll(loaded);
+        }
+
         if (chestCache.isEmpty()) {
             sendMessage("§cCache is empty. Please run Rebuild Cache first.");
             this.setEnabled(false);
@@ -282,23 +259,17 @@ public class AutoStash extends Module {
     private void calculateStashPlan() {
         stashQueue.clear();
         LocalPlayer player = mc.player;
-        // Use Inventory directly to get correct indices (0-8 hotbar, 9-35 main)
-        // inventoryMenu has different slot mapping (0-4 crafting, 5-8 armor, etc)
-
         int startInv = includeHotbar.getValue() ? 0 : 9;
 
-        // Iterate player inventory (0-35)
         for (int i = startInv; i < 36; i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
 
             String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-
-            // Find best chest for this item
             BlockPos bestChest = findBestChest(itemId);
 
             if (bestChest != null) {
-                stashQueue.computeIfAbsent(bestChest, k -> new ArrayList<>()).add(i); // Store slot ID to move
+                stashQueue.computeIfAbsent(bestChest, k -> new ArrayList<>()).add(i);
             }
         }
     }
@@ -316,7 +287,6 @@ public class AutoStash extends Module {
 
             if (contents.containsKey(itemId)) {
                 BlockPos pos = CacheUtils.stringToPos(posStr);
-                // Check range
                 if (pos.distSqr(playerPos) > rangeSq) continue;
 
                 int count = contents.get(itemId);
@@ -335,7 +305,6 @@ public class AutoStash extends Module {
             currentTarget = currentStashEntry.getKey();
             currentState = State.OPENING_FOR_STASH;
         } else {
-            // Done
             this.setEnabled(false);
         }
     }
@@ -345,45 +314,72 @@ public class AutoStash extends Module {
         int containerSlots = menu.slots.size() - 36;
 
         if (containerSlots <= 0) {
-             currentState = State.CLOSING_AFTER_STASH;
-             return;
+            currentState = State.CLOSING_AFTER_STASH;
+            return;
         }
 
         List<Integer> slotsToMove = currentStashEntry.getValue();
         int limit = itemsPerTick.getInt();
         int moves = 0;
 
-        // Create a copy to avoid modification exceptions if we were iterating directly,
-        // though here we are iterating a managed list from the queue map entry
         Iterator<Integer> it = slotsToMove.iterator();
         while (it.hasNext() && moves < limit) {
-             int invSlotIndex = it.next();
+            int invSlotIndex = it.next();
+            int menuSlotId;
+            if (invSlotIndex < 9) {
+                menuSlotId = containerSlots + 27 + invSlotIndex;
+            } else {
+                menuSlotId = containerSlots + (invSlotIndex - 9);
+            }
 
-             int menuSlotId;
-             if (invSlotIndex < 9) {
-                 menuSlotId = containerSlots + 27 + invSlotIndex;
-             } else {
-                 menuSlotId = containerSlots + (invSlotIndex - 9);
-             }
-
-             // Verify item is still what we expect (rudimentary check)
-             Slot slot = menu.getSlot(menuSlotId);
-             if (slot.hasItem()) {
-                 sendQuickMovePacket(menu, menuSlotId);
-                 moves++;
-             }
-             it.remove(); // Remove from pending list
+            Slot slot = menu.getSlot(menuSlotId);
+            if (slot.hasItem()) {
+                sendQuickMovePacket(menu, menuSlotId);
+                moves++;
+            }
+            it.remove();
         }
 
         if (slotsToMove.isEmpty()) {
+            // [CHANGE] Cập nhật Cache ngay lập tức sau khi cất xong
+            updateCurrentContainerToCache();
             currentState = State.CLOSING_AFTER_STASH;
         }
-        // Else stay in STASHING_ITEMS to continue next tick
     }
 
     // ============================================================================================
-    // COMMON HELPERS
+    // COMMON HELPERS & UPDATE LOGIC
     // ============================================================================================
+
+    /**
+     * Helper mới: Quét container đang mở và cập nhật vào Cache (RAM + Disk).
+     * Được gọi khi Rebuild Cache HOẶC khi vừa stash xong.
+     */
+    private void updateCurrentContainerToCache() {
+        if (currentTarget == null || mc.player == null) return;
+        AbstractContainerMenu menu = mc.player.containerMenu;
+        int containerSlots = menu.slots.size() - 36;
+
+        if (containerSlots > 0) {
+            Map<String, Integer> contents = new HashMap<>();
+
+            for (int i = 0; i < containerSlots; i++) {
+                ItemStack stack = menu.getSlot(i).getItem();
+                if (!stack.isEmpty()) {
+                    String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+                    contents.put(itemId, contents.getOrDefault(itemId, 0) + stack.getCount());
+                }
+            }
+
+            // 1. Cập nhật Memory Cache
+            String posKey = CacheUtils.posToString(currentTarget);
+            chestCache.put(posKey, contents);
+
+            // 2. Cập nhật Disk Cache (chỉ cập nhật đúng entry này để tối ưu)
+            Path cacheFile = CacheUtils.getCacheFilePath(mc, "autostash");
+            CacheUtils.updateSpecificJsonObject(cacheFile, posKey, contents);
+        }
+    }
 
     private void openTargetSilent() {
         if (currentTarget == null) return;
@@ -407,11 +403,10 @@ public class AutoStash extends Module {
         }
         waitTimer--;
         if (waitTimer <= 0) {
-            // Timeout, skip this chest
             if (currentState == State.WAITING_FOR_SCAN_OPEN) {
-                currentState = State.SCANNING_WORLD; // Next scan
+                currentState = State.SCANNING_WORLD;
             } else {
-                currentState = State.CLOSING_AFTER_STASH; // Next stash target
+                currentState = State.CLOSING_AFTER_STASH;
             }
         }
     }
@@ -422,7 +417,7 @@ public class AutoStash extends Module {
         containerReady = false;
 
         if (nextState == State.OPENING_FOR_STASH) {
-             moveToNextStashTarget();
+            moveToNextStashTarget();
         } else {
             currentState = nextState;
         }
@@ -444,8 +439,6 @@ public class AutoStash extends Module {
         if (be instanceof ChestBlockEntity) {
             net.minecraft.world.level.block.state.BlockState state = be.getBlockState();
             if (state.hasProperty(ChestBlock.TYPE)) {
-                // Only scan SINGLE or RIGHT part of double chest to avoid duplicates
-                // Opening the RIGHT part usually opens the full double chest
                 return state.getValue(ChestBlock.TYPE) == ChestType.LEFT;
             }
         }
