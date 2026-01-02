@@ -43,7 +43,7 @@ public class AutoStash extends Module {
     // --- Cache Data Structures ---
     private static Map<String, Map<String, Integer>> chestCache = new HashMap<>();
 
-    // [NEW] Cờ đánh dấu cache đã thay đổi
+    // Cờ đánh dấu cache đã thay đổi
     public static boolean cacheDirty = false;
 
     public static Map<String, Map<String, Integer>> getChestCache() {
@@ -64,8 +64,15 @@ public class AutoStash extends Module {
 
     private enum State {
         IDLE,
+        // Rebuild Cache States
         SCANNING_WORLD, OPENING_FOR_SCAN, WAITING_FOR_SCAN_OPEN, SCANNING_CONTENTS, CLOSING_AFTER_SCAN,
-        CALCULATING_STASH, OPENING_FOR_STASH, WAITING_FOR_STASH_OPEN, STASHING_ITEMS, CLOSING_AFTER_STASH
+        // Smart Stash States
+        CALCULATING_STASH,
+        OPENING_FOR_STASH,
+        WAITING_FOR_STASH_OPEN,
+        STASHING_ITEMS,
+        WAITING_FOR_UPDATE, // [NEW] Chờ server đồng bộ item vào rương
+        CLOSING_AFTER_STASH
     }
 
     public AutoStash() {
@@ -126,14 +133,16 @@ public class AutoStash extends Module {
             case OPENING_FOR_STASH: openTargetSilent(); break;
             case WAITING_FOR_STASH_OPEN: waitForContainer(State.STASHING_ITEMS); break;
             case STASHING_ITEMS: performStash(); break;
+            case WAITING_FOR_UPDATE: waitForUpdate(); break; // [NEW] Xử lý chờ
             case CLOSING_AFTER_STASH: closeSilent(State.OPENING_FOR_STASH); break;
             case IDLE: default: break;
         }
     }
 
+    // ... (Giữ nguyên logic Rebuild Cache) ...
     private void startRebuildCache() {
         chestCache.clear();
-        cacheDirty = true; // [UPDATE] Đánh dấu thay đổi
+        cacheDirty = true;
         scanQueue.clear();
         BlockPos playerPos = mc.player.blockPosition();
         int r = range.getInt();
@@ -171,6 +180,7 @@ public class AutoStash extends Module {
         currentState = State.CLOSING_AFTER_SCAN;
     }
 
+    // ... (Logic Smart Stash) ...
     private void startSmartStash() {
         Path cacheFile = CacheUtils.getCacheFilePath(mc, "autostash");
         Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
@@ -178,7 +188,7 @@ public class AutoStash extends Module {
 
         if (loaded != null && chestCache.isEmpty()) {
             chestCache.putAll(loaded);
-            cacheDirty = true; // [UPDATE] Đánh dấu thay đổi khi load
+            cacheDirty = true;
         }
 
         if (chestCache.isEmpty()) {
@@ -263,7 +273,19 @@ public class AutoStash extends Module {
             }
             it.remove();
         }
+
+        // Khi đã gửi hết packet chuyển đồ, chuyển sang trạng thái chờ đồng bộ
         if (slotsToMove.isEmpty()) {
+            currentState = State.WAITING_FOR_UPDATE;
+            waitTimer = 10; // Chờ 10 ticks (0.5 giây) để server cập nhật rương
+        }
+    }
+
+    // [NEW] Hàm chờ đồng bộ
+    private void waitForUpdate() {
+        waitTimer--;
+        if (waitTimer <= 0) {
+            // Sau khi chờ xong, quét lại rương để lấy số liệu chuẩn xác nhất
             updateCurrentContainerToCache();
             currentState = State.CLOSING_AFTER_STASH;
         }
@@ -285,7 +307,7 @@ public class AutoStash extends Module {
             String posKey = CacheUtils.posToString(currentTarget);
             chestCache.put(posKey, contents);
 
-            // [UPDATE] Bật cờ dirty để GUI biết cần cập nhật
+            // Bật cờ dirty để GUI cập nhật
             cacheDirty = true;
 
             Path cacheFile = CacheUtils.getCacheFilePath(mc, "autostash");
@@ -293,6 +315,7 @@ public class AutoStash extends Module {
         }
     }
 
+    // ... (Các helper methods khác giữ nguyên) ...
     private void openTargetSilent() {
         if (currentTarget == null) return;
         Vec3 center = Vec3.atCenterOf(currentTarget);
