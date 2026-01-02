@@ -6,6 +6,8 @@ import com.duox.advancedutilities.system.ModuleManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,13 +21,19 @@ public class MixinMinecraft {
         if (screen instanceof AbstractContainerScreen<?>) {
             AutoStash autoStash = ModuleManager.INSTANCE.getModule(AutoStash.class);
             if (autoStash != null && autoStash.isEnabled() && autoStash.isSilentMode()) {
-                ci.cancel();
+                if (screen instanceof ContainerScreen || screen instanceof ShulkerBoxScreen) {
+                    ci.cancel();
+                    return;
+                }
                 return;
             }
 
             StorageManager storageManager = ModuleManager.INSTANCE.getModule(StorageManager.class);
             if (storageManager != null && storageManager.isEnabled() && storageManager.isSilentMode()) {
-                ci.cancel();
+                if (screen instanceof ContainerScreen || screen instanceof ShulkerBoxScreen) {
+                    ci.cancel();
+                    return;
+                }
                 return;
             }
         }

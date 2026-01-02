@@ -11,7 +11,8 @@
     "MixinConnectScreen",
     "MixinDisconnectedScreen",
     "MixinGameRenderer",
-    "MixinMinecraft"
+    "MixinMinecraft",
+    "MixinContainerScreen"
   ],
   "injectors": {
     "defaultRequire": 1

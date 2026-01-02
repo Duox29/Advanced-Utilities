@@ -166,10 +166,10 @@ public class StorageScreen extends Screen {
 
     @Override
     public void onClose() {
-        if (!keepModuleOn) {
-            storageManager.clearRequestQueue();
-            storageManager.setEnabled(false);
-        }
+//        if (!keepModuleOn) {
+//            storageManager.clearRequestQueue();
+//            storageManager.setEnabled(false);
+//        }
         super.onClose();
     }
 

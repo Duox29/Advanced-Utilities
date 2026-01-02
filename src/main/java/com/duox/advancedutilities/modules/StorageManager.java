@@ -54,6 +54,9 @@ public class StorageManager extends Module {
     @Override
     public void onEnable() {
         if (mc.player == null) return;
+        if (mc.screen == null) {
+            mc.setScreen(new StorageScreen(this));
+        }
 
         // If we have pending requests, start processing them
         if (!requestQueue.isEmpty()) {
@@ -245,7 +248,7 @@ public class StorageManager extends Module {
             } else {
                 // Nếu không còn gì để làm, mới tắt module
                 currentState = State.IDLE;
-                this.setEnabled(false);
+                //this.setEnabled(false);
             }
         }
     }
