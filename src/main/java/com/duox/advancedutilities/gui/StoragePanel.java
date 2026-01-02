@@ -31,8 +31,9 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     // --- SETTINGS ---
     private static final int PANEL_WIDTH = 180;
     private static final int PANEL_HEIGHT = 200;
+    private static final int HEADER_HEIGHT = 20; // Chiều cao thanh tiêu đề
 
-    // Position (Mặc định sẽ được set lại khi init)
+    // Position
     public int x;
     public int y;
 
@@ -45,7 +46,10 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     private static final int COLOR_BG_BORDER = 0xFF585858;
     private static final int COLOR_SLOT_BG = 0xFF353535;
     private static final int COLOR_SLOT_HIGHLIGHT = 0x80FFFFFF;
+
+    // Màu Header: Bình thường / Khi hover chuột (để biết là kéo được)
     private static final int COLOR_HEADER = 0xFF303030;
+    private static final int COLOR_HEADER_HOVER = 0xFF404040;
 
     // Grid Settings
     private static final int SLOT_SIZE = 18;
@@ -87,7 +91,6 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     }
 
     private void initComponents() {
-        // Init Components relative to x, y
         int searchW = 120;
         this.searchBox = new EditBox(mc.font, x + PANEL_WIDTH - searchW - 10, y + 25, searchW, 12, Component.literal("Search"));
         this.searchBox.setMaxLength(50);
@@ -125,11 +128,17 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
         graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, COLOR_BG_MAIN);
         graphics.renderOutline(x, y, PANEL_WIDTH, PANEL_HEIGHT, COLOR_BG_BORDER);
 
-        // Header
-        graphics.fill(x, y, x + PANEL_WIDTH, y + 20, COLOR_HEADER);
+        // 2. Header (Draggable Area)
+        boolean isHoverHeader = mouseX >= x && mouseX <= x + PANEL_WIDTH && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
+        int headerColor = isHoverHeader || isDragging ? COLOR_HEADER_HOVER : COLOR_HEADER;
+
+        graphics.fill(x, y, x + PANEL_WIDTH, y + HEADER_HEIGHT, headerColor);
         graphics.drawString(mc.font, "Storage Terminal", x + 5, y + 6, 0xFFE0E0E0, false);
 
-        // 2. Grid Background
+        // Vẽ thêm một cái viền nhỏ dưới header để tách biệt
+        graphics.hLine(x, x + PANEL_WIDTH - 1, y + HEADER_HEIGHT, COLOR_BG_BORDER);
+
+        // 3. Grid Background
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int col = 0; col < GRID_COLS; col++) {
                 int sx = x + GRID_X_OFFSET + col * SLOT_SIZE;
@@ -138,18 +147,18 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
             }
         }
 
-        // 3. Search Box BG
+        // 4. Search Box BG
         graphics.fill(searchBox.getX() - 2, searchBox.getY() - 2, searchBox.getX() + searchBox.getWidth() + 2, searchBox.getY() + 14, 0xFF000000);
 
-        // 4. Render Components
+        // 5. Render Components
         searchBox.render(graphics, mouseX, mouseY, partialTick);
         requestButton.render(graphics, mouseX, mouseY, partialTick);
         autoStashButton.render(graphics, mouseX, mouseY, partialTick);
 
-        // 5. Scrollbar
+        // 6. Scrollbar
         renderScrollbar(graphics, mouseX, mouseY);
 
-        // 6. Items
+        // 7. Items
         renderItems(graphics, mouseX, mouseY);
     }
 
@@ -207,23 +216,28 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
         }
     }
 
-    // --- INPUT HANDLING (Implemented via Interfaces) ---
+    // --- INPUT HANDLING ---
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (!isMouseOver(mouseX, mouseY)) return false;
 
-        // 1. Handle Dragging
-        if (mouseY >= y && mouseY <= y + 20) {
+        // 1. Handle Dragging (Header Only)
+        // Click vào vùng header (20px trên cùng)
+        if (mouseY >= y && mouseY <= y + HEADER_HEIGHT) {
             isDragging = true;
             dragOffsetX = mouseX - x;
             dragOffsetY = mouseY - y;
-            return true;
+
+            // QUAN TRỌNG: Phải set focus vào chính Panel để sự kiện mouseDragged hoạt động đúng
+            this.setFocused(true);
+
+            return true; // Consume event
         }
 
         // 2. Components
         if (searchBox.mouseClicked(mouseX, mouseY, button)) {
-            setFocused(searchBox);
+            setFocusedListener(searchBox);
             return true;
         }
         if (requestButton.mouseClicked(mouseX, mouseY, button)) return true;
@@ -232,7 +246,7 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
         // 3. Grid
         handleGridClick(mouseX, mouseY, button);
 
-        return true; // Consume event (blocks clicking slots underneath)
+        return true;
     }
 
     @Override
@@ -246,8 +260,22 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (isDragging) {
-            this.x = (int)(mouseX - dragOffsetX);
-            this.y = (int)(mouseY - dragOffsetY);
+            // Cập nhật vị trí mới
+            int newX = (int)(mouseX - dragOffsetX);
+            int newY = (int)(mouseY - dragOffsetY);
+
+            // Boundary Check (Không cho kéo ra khỏi màn hình)
+            int windowWidth = mc.getWindow().getGuiScaledWidth();
+            int windowHeight = mc.getWindow().getGuiScaledHeight();
+
+            // Clamp X (Giữ lại ít nhất 20px trong màn hình)
+            newX = Mth.clamp(newX, -PANEL_WIDTH + 20, windowWidth - 20);
+
+            // Clamp Y (Giữ header luôn trong màn hình để còn kéo lại được)
+            newY = Mth.clamp(newY, 0, windowHeight - HEADER_HEIGHT);
+
+            this.x = newX;
+            this.y = newY;
             updateComponentPositions();
             return true;
         }
@@ -298,8 +326,7 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     @Override
     public void updateNarration(NarrationElementOutput narrationElementOutput) {}
 
-    public void setFocused(GuiEventListener listener) {
-        // Simple focus handling
+    public void setFocusedListener(GuiEventListener listener) {
         if (listener == searchBox) searchBox.setFocused(true);
         else searchBox.setFocused(false);
     }

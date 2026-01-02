@@ -286,7 +286,7 @@ public class StorageManager extends Module {
     }
 
     public boolean isSilentMode() {
-        return this.isEnabled();
+        return this.isEnabled() && (currentState != State.IDLE && currentState != State.PLANNING);
     }
 
     private void performWithdrawal() {

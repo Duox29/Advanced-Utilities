@@ -161,15 +161,20 @@ public class StorageScreen extends Screen {
         });
         this.addRenderableWidget(autoStashButton);
 
+        this.addRenderableWidget(Button.builder(Component.literal("X"), b -> {
+            storageManager.setEnabled(false); // Tắt hẳn module
+            this.onClose(); // Đóng GUI
+        }).bounds(guiLeft + GUI_WIDTH - 20, guiTop - 20, 20, 20).build());
+
         refreshItemList();
     }
 
     @Override
     public void onClose() {
-//        if (!keepModuleOn) {
-//            storageManager.clearRequestQueue();
-//            storageManager.setEnabled(false);
-//        }
+        if (!keepModuleOn) {
+            storageManager.clearRequestQueue();
+            //storageManager.setEnabled(false);
+        }
         super.onClose();
     }
 
