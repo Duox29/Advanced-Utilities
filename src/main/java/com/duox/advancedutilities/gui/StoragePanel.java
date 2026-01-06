@@ -37,10 +37,6 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     public int x;
     public int y;
 
-    // Dragging Logic
-    private boolean isDragging = false;
-    private double dragOffsetX, dragOffsetY;
-
     // --- COLORS ---
     private static final int COLOR_BG_MAIN = 0xFF212121;
     private static final int COLOR_BG_BORDER = 0xFF585858;
@@ -113,15 +109,6 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
         refreshItemList();
     }
 
-    private void updateComponentPositions() {
-        this.searchBox.setX(x + PANEL_WIDTH - this.searchBox.getWidth() - 10);
-        this.searchBox.setY(y + 25);
-        this.requestButton.setX(x + 10);
-        this.requestButton.setY(y + PANEL_HEIGHT - 25);
-        this.autoStashButton.setX(x + PANEL_WIDTH - 50);
-        this.autoStashButton.setY(y + PANEL_HEIGHT - 25);
-    }
-
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (AutoStash.cacheDirty) {
@@ -132,11 +119,8 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
         graphics.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, COLOR_BG_MAIN);
         graphics.renderOutline(x, y, PANEL_WIDTH, PANEL_HEIGHT, COLOR_BG_BORDER);
 
-        // 2. Header (Draggable Area)
-        boolean isHoverHeader = mouseX >= x && mouseX <= x + PANEL_WIDTH && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
-        int headerColor = isHoverHeader || isDragging ? COLOR_HEADER_HOVER : COLOR_HEADER;
-
-        graphics.fill(x, y, x + PANEL_WIDTH, y + HEADER_HEIGHT, headerColor);
+        // 2. Header
+        graphics.fill(x, y, x + PANEL_WIDTH, y + HEADER_HEIGHT, COLOR_HEADER);
         graphics.drawString(mc.font, "Storage Terminal", x + 5, y + 6, 0xFFE0E0E0, false);
 
         // Vẽ thêm một cái viền nhỏ dưới header để tách biệt
@@ -226,20 +210,7 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (!isMouseOver(mouseX, mouseY)) return false;
 
-        // 1. Handle Dragging (Header Only)
-        // Click vào vùng header (20px trên cùng)
-        if (mouseY >= y && mouseY <= y + HEADER_HEIGHT) {
-            isDragging = true;
-            dragOffsetX = mouseX - x;
-            dragOffsetY = mouseY - y;
-
-            // QUAN TRỌNG: Phải set focus vào chính Panel để sự kiện mouseDragged hoạt động đúng
-            this.setFocused(true);
-
-            return true; // Consume event
-        }
-
-        // 2. Components
+        // 1. Components
         if (searchBox.mouseClicked(mouseX, mouseY, button)) {
             setFocusedListener(searchBox);
             return true;
@@ -255,7 +226,6 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        isDragging = false;
         return searchBox.mouseReleased(mouseX, mouseY, button) ||
                 requestButton.mouseReleased(mouseX, mouseY, button) ||
                 autoStashButton.mouseReleased(mouseX, mouseY, button);
@@ -263,26 +233,6 @@ public class StoragePanel implements Renderable, GuiEventListener, NarratableEnt
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (isDragging) {
-            // Cập nhật vị trí mới
-            int newX = (int)(mouseX - dragOffsetX);
-            int newY = (int)(mouseY - dragOffsetY);
-
-            // Boundary Check (Không cho kéo ra khỏi màn hình)
-            int windowWidth = mc.getWindow().getGuiScaledWidth();
-            int windowHeight = mc.getWindow().getGuiScaledHeight();
-
-            // Clamp X (Giữ lại ít nhất 20px trong màn hình)
-            newX = Mth.clamp(newX, -PANEL_WIDTH + 20, windowWidth - 20);
-
-            // Clamp Y (Giữ header luôn trong màn hình để còn kéo lại được)
-            newY = Mth.clamp(newY, 0, windowHeight - HEADER_HEIGHT);
-
-            this.x = newX;
-            this.y = newY;
-            updateComponentPositions();
-            return true;
-        }
         return searchBox.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 

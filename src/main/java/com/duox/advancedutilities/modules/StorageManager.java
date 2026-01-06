@@ -3,6 +3,7 @@ package com.duox.advancedutilities.modules;
 import com.duox.advancedutilities.gui.StorageScreen;
 import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
+import com.duox.advancedutilities.system.settings.NumberSetting;
 import com.duox.advancedutilities.utils.CacheUtils;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap; // Đảm bảo import này có sẵn hoặc dùng HashMap thường
 import net.minecraft.core.BlockPos;
@@ -47,8 +48,13 @@ public class StorageManager extends Module {
     private int silentContainerId = -1;
     private boolean containerReady = false;
 
+    public final NumberSetting panelX = new NumberSetting("Panel X", 300, 0, 2560, 1);
+    public final NumberSetting panelY = new NumberSetting("Panel Y", 100, 0, 1440, 1);
+
     public StorageManager() {
         super("StorageManager", "Manage items from cached chests.", Category.WORLD);
+        this.addSetting(panelX);
+        this.addSetting(panelY);
     }
 
     @Override
