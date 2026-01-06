@@ -22,8 +22,7 @@ public class ModuleManager {
     // Use a Map for O(1) lookup by class instead of looping
     private final Map<Class<? extends Module>, Module> moduleMap = new LinkedHashMap<>();
 
-    // Cached lists for performance
-    private final List<Module> enabledModules = new ArrayList<>();
+    // Cached list for performance iteration
     private final List<Module> allModules = new ArrayList<>();
 
     private ModuleManager() {
@@ -60,9 +59,6 @@ public class ModuleManager {
     public void register(Module module) {
         moduleMap.put(module.getClass(), module);
         allModules.add(module);
-        if (module.isEnabled()) {
-            enabledModules.add(module);
-        }
     }
 
     /**
@@ -87,27 +83,34 @@ public class ModuleManager {
     }
 
     /**
+     * Sets the enabled state of a module and optionally saves the configuration.
+     *
+     * @param module The module to modify
+     * @param state  The new enabled state
+     * @param save   Whether to save the configuration to disk
+     */
+    public void setModuleState(Module module, boolean state, boolean save) {
+        if (module.isEnabled() == state) return;
+
+        module.setEnabled(state);
+
+        // We no longer manually manage enabledModules or call onEnable/onDisable here
+        // because Module.setEnabled() likely handles lifecycle, or the GUI handles it.
+        // We just ensure config is saved.
+
+        if (save) {
+            ConfigManager.getInstance().save();
+        }
+    }
+
+    /**
      * Sets the enabled state of a module and saves the configuration.
      *
      * @param module The module to modify
      * @param state  The new enabled state
      */
     public void setModuleState(Module module, boolean state) {
-        if (module.isEnabled() == state) return;
-
-        module.setEnabled(state);
-
-        if (state) {
-            if (!enabledModules.contains(module)) {
-                enabledModules.add(module);
-                module.onEnable();
-            }
-        } else {
-            enabledModules.remove(module);
-            module.onDisable();
-        }
-
-        ConfigManager.getInstance().save();
+        setModuleState(module, state, true);
     }
 
     /**
@@ -167,9 +170,13 @@ public class ModuleManager {
                 Minecraft.getInstance().gui.setOverlayMessage(message, false);
             }
 
-            // Iterate over cached enabled modules list
-            for (int i = 0; i < enabledModules.size(); i++) {
-                enabledModules.get(i).onTick();
+            // Iterate over all modules and check enabled state
+            // This is safer than a cached list because modules might be toggled by GUI directly
+            for (int i = 0; i < allModules.size(); i++) {
+                Module module = allModules.get(i);
+                if (module.isEnabled()) {
+                    module.onTick();
+                }
             }
         }
     }

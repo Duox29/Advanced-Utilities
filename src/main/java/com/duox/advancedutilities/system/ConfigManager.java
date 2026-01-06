@@ -81,7 +81,8 @@ public class ConfigManager {
                     JsonObject moduleJson = json.getAsJsonObject(module.getName());
 
                     if (moduleJson.has("enabled")) {
-                        module.setEnabled(moduleJson.get("enabled").getAsBoolean());
+                        // Use false for save parameter to avoid saving while loading
+                        ModuleManager.INSTANCE.setModuleState(module, moduleJson.get("enabled").getAsBoolean(), false);
                     }
 
                     if (moduleJson.has("settings")) {
