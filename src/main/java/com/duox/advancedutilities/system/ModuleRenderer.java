@@ -1,9 +1,12 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.Finder;
+import com.duox.advancedutilities.utils.RenderUtils;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -45,6 +48,7 @@ public class ModuleRenderer {
     private void renderFinder(RenderLevelStageEvent event, Finder finder) {
         PoseStack poseStack = event.getPoseStack();
         Vec3 cameraPos = event.getCamera().getPosition();
+        Frustum frustum = event.getFrustum();
 
         // 1. Chuẩn bị trạng thái RenderSystem (OpenGL)
         // Lưu trạng thái cũ để không làm hỏng game
@@ -71,7 +75,11 @@ public class ModuleRenderer {
         var blocks = finder.getFoundBlocks(); // Get thread-safe snapshot
 
         for (BlockPos pos : blocks) {
-            addFilledBoxToBuffer(poseStack, buffer, new AABB(pos), rB, gB, bB, aB);
+            AABB aabb = new AABB(pos);
+            // Simple frustum culling
+            if (frustum.isVisible(aabb)) {
+                RenderUtils.addFilledBoxToBuffer(poseStack, buffer, aabb, rB, gB, bB, aB);
+            }
         }
 
         tesselator.end();
@@ -91,7 +99,9 @@ public class ModuleRenderer {
             double z = Mth.lerp(event.getPartialTick(), entity.zo, entity.getZ());
 
             AABB box = entity.getType().getDimensions().makeBoundingBox(new Vec3(x, y, z));
-            addLineBoxToBuffer(poseStack, buffer, box, rE, gE, bE, aE);
+            if (frustum.isVisible(box)) {
+                RenderUtils.addLineBoxToBuffer(poseStack, buffer, box, rE, gE, bE, aE);
+            }
         }
 
         tesselator.end();
@@ -106,93 +116,5 @@ public class ModuleRenderer {
         poseStack.popPose();
     }
 
-    /*
-     * Helper method to add a filled box to the vertex buffer.
-     */
-    private void addFilledBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {
-        float minX = (float) box.minX;
-        float minY = (float) box.minY;
-        float minZ = (float) box.minZ;
-        float maxX = (float) box.maxX;
-        float maxY = (float) box.maxY;
-        float maxZ = (float) box.maxZ;
-
-        var matrix = stack.last().pose();
-
-        // Down
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-
-        // Up
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-
-        // North
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-
-        // South
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-
-        // West
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).endVertex();
-
-        // East
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).endVertex();
-    }
-
-    private void addLineBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {
-        float minX = (float) box.minX;
-        float minY = (float) box.minY;
-        float minZ = (float) box.minZ;
-        float maxX = (float) box.maxX;
-        float maxY = (float) box.maxY;
-        float maxZ = (float) box.maxZ;
-        var matrix = stack.last().pose();
-
-        // Bottom
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-
-        // Top
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-
-        // Sides
-        buffer.vertex(matrix, minX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, minZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, maxX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, minY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-        buffer.vertex(matrix, minX, maxY, maxZ).color(r, g, b, a).normal(0, 1, 0).endVertex();
-    }
+    // Removed helper methods as they are now in RenderUtils
 }

@@ -22,6 +22,10 @@ public class ModuleManager {
     // Use a Map for O(1) lookup by class instead of looping
     private final Map<Class<? extends Module>, Module> moduleMap = new LinkedHashMap<>();
 
+    // Cached lists for performance
+    private final List<Module> enabledModules = new ArrayList<>();
+    private final List<Module> allModules = new ArrayList<>();
+
     private ModuleManager() {
         // Player category modules
         register(new AutoFish());
@@ -55,6 +59,10 @@ public class ModuleManager {
      */
     public void register(Module module) {
         moduleMap.put(module.getClass(), module);
+        allModules.add(module);
+        if (module.isEnabled()) {
+            enabledModules.add(module);
+        }
     }
 
     /**
@@ -85,7 +93,20 @@ public class ModuleManager {
      * @param state  The new enabled state
      */
     public void setModuleState(Module module, boolean state) {
+        if (module.isEnabled() == state) return;
+
         module.setEnabled(state);
+
+        if (state) {
+            if (!enabledModules.contains(module)) {
+                enabledModules.add(module);
+                module.onEnable();
+            }
+        } else {
+            enabledModules.remove(module);
+            module.onDisable();
+        }
+
         ConfigManager.getInstance().save();
     }
 
@@ -109,11 +130,14 @@ public class ModuleManager {
         if (event.phase == TickEvent.Phase.END && Minecraft.getInstance().player != null) {
             // Handle module keybinds
             List<Module> toggledModules = new ArrayList<>();
-            for (Module module : moduleMap.values()) {
+            // Use cached list instead of moduleMap.values()
+            for (int i = 0; i < allModules.size(); i++) {
+                Module module = allModules.get(i);
+
                 if (module.isHold()) {
                     boolean isKeyDown = module.getKeyMapping().isDown();
                     if (module.isEnabled() != isKeyDown) {
-                        module.setEnabled(isKeyDown);
+                        setModuleState(module, isKeyDown);
                         // Optional: Don't notify for hold modules to avoid spam
                         // toggledModules.add(module);
                     }
@@ -122,7 +146,7 @@ public class ModuleManager {
                     }
                 } else {
                     while (module.getKeyMapping().consumeClick()) {
-                        module.setEnabled(!module.isEnabled());
+                        setModuleState(module, !module.isEnabled());
                         toggledModules.add(module);
                     }
                 }
@@ -143,9 +167,10 @@ public class ModuleManager {
                 Minecraft.getInstance().gui.setOverlayMessage(message, false);
             }
 
-            moduleMap.values().stream()
-                    .filter(Module::isEnabled)
-                    .forEach(Module::onTick);
+            // Iterate over cached enabled modules list
+            for (int i = 0; i < enabledModules.size(); i++) {
+                enabledModules.get(i).onTick();
+            }
         }
     }
 

@@ -49,6 +49,9 @@ public class Finder extends Module {
     private volatile List<BlockPos> foundBlocks = Collections.emptyList();
     private volatile List<Entity> foundEntities = Collections.emptyList();
 
+    // Reuse collections to reduce GC pressure
+    private final List<Entity> entityScanResults = new ArrayList<>();
+
     // Internal state for incremental scanning
     private final List<BlockPos> accumulatedBlocks = new ArrayList<>();
     private final List<ChunkPos> pendingChunks = new ArrayList<>();
@@ -85,7 +88,9 @@ public class Finder extends Module {
     private void resetScanState() {
         isScanningBlocks.set(false);
         pendingChunks.clear();
-        accumulatedBlocks.clear();
+        synchronized (accumulatedBlocks) {
+            accumulatedBlocks.clear();
+        }
         lastScanPos = null;
     }
 
@@ -259,11 +264,11 @@ public class Finder extends Module {
 
     private void scanEntities() {
         if (mc.level == null) return;
-        
+
         double r = range.getValue();
         AABB area = mc.player.getBoundingBox().inflate(r);
 
-        List<Entity> results = new ArrayList<>();
+        entityScanResults.clear(); // Reuse list
         int max = limit.getInt();
 
         List<Entity> allEntities = mc.level.getEntities(mc.player, area);
@@ -272,12 +277,13 @@ public class Finder extends Module {
         allEntities.sort(Comparator.comparingDouble(e -> e.distanceToSqr(mc.player)));
 
         for (Entity entity : allEntities) {
-            if (results.size() >= max) break;
+            if (entityScanResults.size() >= max) break;
             if (entityList.contains(entity.getType())) {
-                results.add(entity);
+                entityScanResults.add(entity);
             }
         }
-        this.foundEntities = results;
+        // Create an unmodifiable copy or just assign a copy for thread safety (rendering reads this)
+        this.foundEntities = new ArrayList<>(entityScanResults);
     }
 
     public List<BlockPos> getFoundBlocks() {
