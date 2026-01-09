@@ -5,18 +5,14 @@ import com.duox.advancedutilities.system.Category;
 import com.duox.advancedutilities.system.Module;
 import com.duox.advancedutilities.system.settings.NumberSetting;
 import com.duox.advancedutilities.utils.CacheUtils;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap; // Đảm bảo import này có sẵn hoặc dùng HashMap thường
+import com.duox.advancedutilities.utils.InventoryUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
-import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -307,7 +303,6 @@ public class StorageManager extends Module {
         Map<String, Integer> itemsToTake = currentTargetEntry.getValue();
 
         // Iterate through chest slots
-        // Note: Iterating backwards might be safer if we are modifying slots, but here strict indexing is fine
         for (int i = 0; i < containerSlots; i++) {
             ItemStack stack = menu.getSlot(i).getItem();
             if (stack.isEmpty()) continue;
@@ -323,31 +318,26 @@ public class StorageManager extends Module {
 
                 if (inSlot <= needed) {
                     // Take whole stack using Quick Move (Shift + Click)
-                    sendClickPacket(menu, i, 0, ClickType.QUICK_MOVE);
+                    InventoryUtils.quickMove(menu, i);
                     actualTaken = inSlot;
                 } else {
                     // Take PARTIAL stack
-                    // Logic: Pickup Stack -> Place 1 by 1 in player inv -> Return remainder
-
-                    int targetSlot = findEmptyPlayerSlot(menu, containerSlots);
+                    int targetSlot = InventoryUtils.findEmptyPlayerSlot(menu, containerSlots);
                     if (targetSlot != -1) {
                         // 1. Pickup source (Left Click)
-                        sendClickPacket(menu, i, 0, ClickType.PICKUP);
+                        InventoryUtils.pickup(menu, i);
 
                         // 2. Drop 'needed' items into player slot (Right Click = Place 1)
-                        // Be careful with packet spam here.
                         for (int k = 0; k < needed; k++) {
-                            sendClickPacket(menu, targetSlot, 1, ClickType.PICKUP);
+                            InventoryUtils.dropOne(menu, targetSlot);
                         }
 
                         // 3. Return remainder to source (Left Click)
-                        sendClickPacket(menu, i, 0, ClickType.PICKUP);
+                        InventoryUtils.pickup(menu, i);
 
                         actualTaken = needed;
                     } else {
-                        // No space in inventory for partial stack, skip or try quick move?
-                        // Let's fallback to Quick Move if full, though it violates quantity rule
-                        // sendMessage("Inventory full for split.");
+                        // Inventory full, skip
                         continue;
                     }
                 }
@@ -358,15 +348,6 @@ public class StorageManager extends Module {
         }
 
         currentState = State.CLOSING_CHEST;
-    }
-
-    private int findEmptyPlayerSlot(AbstractContainerMenu menu, int containerSlotsEnd) {
-        for (int i = containerSlotsEnd; i < menu.slots.size(); i++) {
-            if (menu.getSlot(i).getItem().isEmpty()) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private void updateCache(String itemId, int amountTaken) {
@@ -392,22 +373,11 @@ public class StorageManager extends Module {
     }
 
     private void closeSilent() {
-        if (mc.player != null && mc.player.containerMenu != mc.player.inventoryMenu) {
-            mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
-            mc.player.containerMenu = mc.player.inventoryMenu;
-        }
+        InventoryUtils.closeContainerSilent();
         silentContainerId = -1;
         containerReady = false;
 
         moveToNextTarget();
-    }
-
-    private void sendClickPacket(AbstractContainerMenu menu, int slotId, int button, ClickType clickType) {
-        mc.player.connection.send(new ServerboundContainerClickPacket(
-                menu.containerId, menu.getStateId(), slotId, button, clickType,
-                menu.getSlot(slotId).getItem().copy(),
-                new Int2ObjectOpenHashMap<>()
-        ));
     }
 
     private void sendMessage(String message) {

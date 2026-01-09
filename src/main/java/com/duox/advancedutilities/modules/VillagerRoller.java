@@ -9,6 +9,7 @@ import com.duox.advancedutilities.system.settings.NumberSetting;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.npc.Villager;
@@ -19,7 +20,6 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -39,11 +39,11 @@ public class VillagerRoller extends Module {
 
     private Villager targetVillager;
     private BlockPos jobBlockPos;
-    private Block jobBlock; // The block type to place
+    private Block jobBlock;
 
     private State currentState = State.IDLE;
     private int tickCounter = 0;
-    
+
     // For selection mode
     private boolean selectingVillager = false;
     private boolean selectingBlock = false;
@@ -176,15 +176,14 @@ public class VillagerRoller extends Module {
             case OPEN_GUI:
                 // Interact to open GUI
                 if (mc.screen instanceof MerchantScreen) {
-                    // GUI is already open
                     setState(State.CHECK_TRADES);
                 } else {
-                    // Try to open GUI
-                    // Only interact occasionally to avoid packet spam, but initially try immediately
+                    // Try to open GUI only if we are not looking at a screen
+                    // Use delay to avoid spamming interaction packets
                     if (tickCounter == 0 || tickCounter % 20 == 0) {
-                        if (mc.gameMode != null) {
+                        if (mc.gameMode != null && targetVillager.distanceToSqr(mc.player) < 25) {
                             mc.gameMode.interact(mc.player, targetVillager, InteractionHand.MAIN_HAND);
-                            mc.player.swing(InteractionHand.MAIN_HAND);
+                            mc.player.swing(InteractionHand.MAIN_HAND);// Reset counter after interaction attempt
                         }
                     }
                     tickCounter++;
@@ -223,7 +222,7 @@ public class VillagerRoller extends Module {
                 break;
 
             case BREAK_BLOCK:
-                // Break the job block
+                 // Break the job block
                  BlockState currentStateBlock = mc.level.getBlockState(jobBlockPos);
                  if (currentStateBlock.getBlock() == jobBlock) {
                       // Equip best tool
@@ -231,7 +230,7 @@ public class VillagerRoller extends Module {
                       if (bestSlot != -1 && mc.player.getInventory().selected != bestSlot) {
                           mc.player.getInventory().selected = bestSlot;
                       }
-                      
+
                       if (mc.gameMode != null) {
                           // Legit mining - must be called every tick
                           mc.gameMode.continueDestroyBlock(jobBlockPos, Direction.UP);
