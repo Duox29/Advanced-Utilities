@@ -16,6 +16,12 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /*
  * Manages configuration loading and saving for the Advanced Utilities mod.
  * Uses a singleton pattern to ensure consistent access throughout the mod.
@@ -26,6 +32,16 @@ public class ConfigManager {
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Path configPath = FMLPaths.CONFIGDIR.get().resolve("advancedutilities.json");
+
+    // Debounce saves
+    private final ScheduledExecutorService saveExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "ConfigSaver");
+        t.setDaemon(true);
+        return t;
+    });
+    private ScheduledFuture<?> pendingSave;
+    private final AtomicBoolean isDirty = new AtomicBoolean(false);
+    private static final long SAVE_DELAY_MS = 2000;
 
     private ConfigManager() {
         // Private constructor for singleton pattern
@@ -64,7 +80,8 @@ public class ConfigManager {
                     JsonObject moduleJson = json.getAsJsonObject(module.getName());
 
                     if (moduleJson.has("enabled")) {
-                        module.setEnabled(moduleJson.get("enabled").getAsBoolean());
+                        // Use ModuleManager.setModuleState without save parameter (removed in 1.21.1)
+                        ModuleManager.INSTANCE.setModuleState(module, moduleJson.get("enabled").getAsBoolean());
                     }
 
                     if (moduleJson.has("settings")) {
@@ -95,10 +112,37 @@ public class ConfigManager {
     }
 
     /**
-     * Saves the current configuration to disk.
-     * Creates the config directory if it doesn't exist.
+     * Schedules a save operation.
+     * If a save is already pending, it resets the timer.
+     * If the config file doesn't exist, creates a new one with default values immediately.
      */
     public void save() {
+        // Immediate save if first time (file not exists)
+        if (!Files.exists(configPath)) {
+            performSave();
+            return;
+        }
+
+        // Mark as dirty
+        isDirty.set(true);
+
+        // Cancel existing pending save
+        if (pendingSave != null && !pendingSave.isDone()) {
+            pendingSave.cancel(false);
+        }
+
+        // Schedule new save
+        pendingSave = saveExecutor.schedule(() -> {
+            if (isDirty.compareAndSet(true, false)) {
+                performSave();
+            }
+        }, SAVE_DELAY_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Actually performs the save to disk.
+     */
+    private synchronized void performSave() {
         JsonObject json = new JsonObject();
 
         for (Module module : ModuleManager.INSTANCE.getModules()) {

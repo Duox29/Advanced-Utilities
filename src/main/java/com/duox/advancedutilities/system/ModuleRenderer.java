@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.Finder;
+import com.duox.advancedutilities.utils.RenderUtils;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import net.minecraft.client.renderer.GameRenderer;
@@ -12,7 +13,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.bus.api.SubscribeEvent;
-import org.joml.Matrix4f;
 
 /*
  * Handles rendering for modules that need world rendering.
@@ -68,11 +68,15 @@ public class ModuleRenderer {
         float rB = 1.0f, gB = 0.8f, bB = 0.2f, aB = Constants.RENDER_BLOCK_ALPHA; // Orange-yellow, transparent
         var blocks = finder.getFoundBlocks(); // Get thread-safe snapshot
 
+        boolean hasBlocks = false;
         for (BlockPos pos : blocks) {
-            addFilledBoxToBuffer(poseStack, buffer, new AABB(pos), rB, gB, bB, aB);
+            RenderUtils.addFilledBoxToBuffer(poseStack, buffer, new AABB(pos), rB, gB, bB, aB);
+            hasBlocks = true;
         }
 
-        BufferUploader.drawWithShader(buffer.buildOrThrow());
+        if (hasBlocks) {
+            BufferUploader.drawWithShader(buffer.buildOrThrow());
+        }
 
         // Phase 2: Render entities (lines)
         RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
@@ -83,16 +87,20 @@ public class ModuleRenderer {
         float rE = 1.0f, gE = 0.2f, bE = 0.2f, aE = Constants.RENDER_ENTITY_ALPHA; // Red
         var entities = finder.getFoundEntities();
 
+        boolean hasEntities = false;
         for (Entity entity : entities) {
             double x = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.xo, entity.getX());
             double y = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.yo, entity.getY());
             double z = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.zo, entity.getZ());
 
             AABB box = entity.getType().getDimensions().makeBoundingBox(new Vec3(x, y, z));
-            addLineBoxToBuffer(poseStack, buffer, box, rE, gE, bE, aE);
+            RenderUtils.addLineBoxToBuffer(poseStack, buffer, box, rE, gE, bE, aE);
+            hasEntities = true;
         }
 
-        BufferUploader.drawWithShader(buffer.buildOrThrow());
+        if (hasEntities) {
+            BufferUploader.drawWithShader(buffer.buildOrThrow());
+        }
 
         // Restore state (cleanup)
         RenderSystem.enableDepthTest();
@@ -102,95 +110,5 @@ public class ModuleRenderer {
         RenderSystem.lineWidth(Constants.RENDER_DEFAULT_LINE_WIDTH);
 
         poseStack.popPose();
-    }
-
-    /*
-     * Helper method to add a filled box to the vertex buffer.
-     */
-    private void addFilledBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {
-        float minX = (float) box.minX;
-        float minY = (float) box.minY;
-        float minZ = (float) box.minZ;
-        float maxX = (float) box.maxX;
-        float maxY = (float) box.maxY;
-        float maxZ = (float) box.maxZ;
-
-        Matrix4f matrix = stack.last().pose();
-
-        // Down
-        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a);
-
-        // Up
-        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a);
-
-        // North
-        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a);
-
-        // South
-        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a);
-
-        // West
-        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a);
-
-        // East
-        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a);
-        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a);
-    }
-
-    private void addLineBoxToBuffer(PoseStack stack, VertexConsumer buffer, AABB box, float r, float g, float b, float a) {
-        float minX = (float) box.minX;
-        float minY = (float) box.minY;
-        float minZ = (float) box.minZ;
-        float maxX = (float) box.maxX;
-        float maxY = (float) box.maxY;
-        float maxZ = (float) box.maxZ;
-        Matrix4f matrix = stack.last().pose();
-
-        // Bottom
-        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-
-        // Top
-        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-
-        // Sides
-        buffer.addVertex(matrix, minX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, minY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, maxY, minZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, maxX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, minY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
-        buffer.addVertex(matrix, minX, maxY, maxZ).setColor(r, g, b, a).setNormal(0, 1, 0);
     }
 }

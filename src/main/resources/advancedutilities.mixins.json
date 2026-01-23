@@ -7,9 +7,12 @@
   "mixins": [
     "IMinecraftAccessor",
     "IMultiPlayerGameModeAccessor",
+    "MixinClientPacketListener",
     "MixinConnectScreen",
+    "MixinContainerScreen",
     "MixinDisconnectedScreen",
-    "MixinGameRenderer"
+    "MixinGameRenderer",
+    "MixinMinecraft"
   ],
   "injectors": {
     "defaultRequire": 1
