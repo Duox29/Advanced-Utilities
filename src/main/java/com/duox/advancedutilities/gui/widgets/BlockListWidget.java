@@ -1,11 +1,11 @@
 package com.duox.advancedutilities.gui.widgets;
+
 import com.duox.advancedutilities.system.BlockSelector;
 import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.settings.BlockListSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-// ARCHITECTURE FIX: Implemented dynamic height calculation
 public class BlockListWidget extends SettingWidget {
+    private static final int ITEM_SIZE = 18;
+    private static final int INPUT_AREA_HEIGHT = 44;
+
     private final BlockListSetting setting;
     private EditBox idInput;
     private Runnable onRefreshCallback;
-    private static final int ITEM_SIZE = 18;
-    private static final int INPUT_AREA_HEIGHT = 35;
 
     public BlockListWidget(BlockListSetting setting, int x, int y, int width, int height) {
         super(x, y, width, height);
@@ -33,12 +33,9 @@ public class BlockListWidget extends SettingWidget {
 
     private int calculateContentHeight() {
         int count = setting.getValue().size();
-        int itemsPerRow = (width - 4) / ITEM_SIZE;
-        if (itemsPerRow < 1) itemsPerRow = 1;
-
+        int itemsPerRow = Math.max(1, (width - 16) / ITEM_SIZE);
         int rows = (int) Math.ceil((double) count / itemsPerRow);
-        int neededHeight = INPUT_AREA_HEIGHT + (rows * ITEM_SIZE) + 4;
-        return Math.max(height, neededHeight);
+        return Math.max(height, INPUT_AREA_HEIGHT + rows * ITEM_SIZE + 12);
     }
 
     @Override
@@ -51,34 +48,43 @@ public class BlockListWidget extends SettingWidget {
         this.onRefreshCallback = onRefresh;
         Minecraft mc = Minecraft.getInstance();
 
-        idInput = new EditBox(mc.font, x, y + 12, width - 45, 18, Component.literal("Block ID"));
+        idInput = new EditBox(mc.font, x + 1, y + 20, width - 96, 18, Component.literal("minecraft:stone"));
         idInput.setMaxLength(256);
+        UiTheme.styleEditBox(idInput);
         widgetConsumer.accept(idInput);
 
-        Button btnAddId = Button.builder(Component.literal("Add"), b -> {
+        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 20, 68, 18, Component.literal("Add"), b -> {
             String val = idInput.getValue();
-            if (val != null && !val.isEmpty()) {
-                ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
-                if (rl != null && BuiltInRegistries.BLOCK.containsKey(rl)) {
-                    setting.add(BuiltInRegistries.BLOCK.get(rl));
-                    ConfigManager.getInstance().save();
-                    idInput.setValue("");
-                    if (onRefreshCallback != null) onRefreshCallback.run();
-                }
+            if (val == null || val.isEmpty()) return;
+            ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
+            if (rl != null && BuiltInRegistries.BLOCK.containsKey(rl)) {
+                setting.add(BuiltInRegistries.BLOCK.get(rl));
+                ConfigManager.getInstance().save();
+                idInput.setValue("");
+                if (onRefreshCallback != null) onRefreshCallback.run();
             }
-        }).bounds(x + width - 40, y + 12, 40, 18).build();
-        widgetConsumer.accept(btnAddId);
+        }));
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
-        guiGraphics.drawString(mc.font, setting.getName(), x, y + 2, 0xFFFFFF, false);
+        guiGraphics.drawString(mc.font, setting.getName(), x, y + 4, UiTheme.TEXT_PRIMARY, false);
+        //guiGraphics.drawString(mc.font, "LMB toggle  •  RMB remove  •  Pick from world", x + width - 120, y + 4, UiTheme.TEXT_FAINT, false);
 
-        int btnAddX = x + width - 20;
-        boolean isHoverAdd = mouseX >= btnAddX && mouseX <= btnAddX + 20 && mouseY >= y && mouseY <= y + 10;
-        guiGraphics.drawString(mc.font, "[+]", btnAddX, y + 2, isHoverAdd ? 0xFF2ECC71 : 0xFFAAAAAA, false);
+        UiTheme.drawInset(guiGraphics, x, y + 18, width - 74, 20);
+        int pickX = x + width - 52;
+        int pickY = y;
+        UiTheme.drawPill(guiGraphics, pickX, pickY, 52, 16,
+                UiTheme.isInside(mouseX, mouseY, pickX, pickY, 52, 16) ? UiTheme.PANEL_HOVER : UiTheme.PANEL_SOFT,
+                UiTheme.TEXT_MUTED,
+                mc.font,
+                "PICK");
 
+        renderGrid(guiGraphics, mouseX, mouseY, mc);
+    }
+
+    private void renderGrid(GuiGraphics guiGraphics, int mouseX, int mouseY, Minecraft mc) {
         int startX = x + 2;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
@@ -93,13 +99,14 @@ public class BlockListWidget extends SettingWidget {
 
             Block block = entry.getKey();
             boolean enabled = entry.getValue();
+            int bg = enabled ? UiTheme.withAlpha(UiTheme.ACCENT, 48) : UiTheme.PANEL_SOFT;
+            int border = enabled ? UiTheme.ACCENT : UiTheme.BORDER_SOFT;
+            UiTheme.drawPanel(guiGraphics, currentX, currentY, 16, 16, bg, border);
 
-            int bgColor = enabled ? 0x8000FF00 : 0x80FF0000;
-            guiGraphics.fill(currentX, currentY, currentX + 16, currentY + 16, bgColor);
-
-            if (mouseX >= currentX && mouseX <= currentX + 16 && mouseY >= currentY && mouseY <= currentY + 16) {
-                guiGraphics.renderOutline(currentX, currentY, 16, 16, 0xFFFFFFFF);
-                guiGraphics.renderTooltip(mc.font, Component.literal(block.getName().getString() + (enabled ? " [ON]" : " [OFF]")), mouseX, mouseY);
+            if (UiTheme.isInside(mouseX, mouseY, currentX, currentY, 16, 16)) {
+                guiGraphics.renderTooltip(mc.font,
+                        Component.literal(block.getName().getString() + (enabled ? " [enabled]" : " [disabled]")),
+                        mouseX, mouseY);
             }
 
             guiGraphics.renderItem(new ItemStack(block), currentX, currentY);
@@ -109,8 +116,8 @@ public class BlockListWidget extends SettingWidget {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int btnAddX = x + width - 20;
-        if (mouseX >= btnAddX && mouseX <= btnAddX + 20 && mouseY >= y && mouseY <= y + 10) {
+        int pickX = x + width - 52;
+        if (UiTheme.isInside(mouseX, mouseY, pickX, y, 52, 16)) {
             BlockSelector.INSTANCE.startSelecting(setting);
             return true;
         }
@@ -120,19 +127,20 @@ public class BlockListWidget extends SettingWidget {
         int currentX = startX;
         int currentY = startY;
         int limitX = x + width - ITEM_SIZE;
-
         List<Block> keys = new ArrayList<>(setting.getValue().keySet());
+
         for (Block block : keys) {
             if (currentX > limitX) {
                 currentX = startX;
                 currentY += ITEM_SIZE;
             }
 
-            if (mouseX >= currentX && mouseX <= currentX + 16 && mouseY >= currentY && mouseY <= currentY + 16) {
-                if (button == 0) setting.toggle(block);
-                else if (button == 1) {
+            if (UiTheme.isInside(mouseX, mouseY, currentX, currentY, 16, 16)) {
+                if (button == 0) {
+                    setting.toggle(block);
+                } else if (button == 1) {
                     setting.remove(block);
-                    if (onRefreshCallback != null) onRefreshCallback.run(); // Refresh layout on remove
+                    if (onRefreshCallback != null) onRefreshCallback.run();
                 }
                 ConfigManager.getInstance().save();
                 return true;

@@ -1,210 +1,314 @@
 package com.duox.advancedutilities.gui;
 
-import com.duox.advancedutilities.gui.widgets.*;
-import com.duox.advancedutilities.system.*;
-import com.duox.advancedutilities.system.Constants;
+import com.duox.advancedutilities.gui.factory.WidgetFactory;
+import com.duox.advancedutilities.gui.widgets.KeybindWidget;
+import com.duox.advancedutilities.gui.widgets.SettingWidget;
+import com.duox.advancedutilities.gui.widgets.UiTheme;
+import com.duox.advancedutilities.system.Category;
+import com.duox.advancedutilities.system.ConfigManager;
 import com.duox.advancedutilities.system.Module;
-import com.duox.advancedutilities.system.settings.*;
+import com.duox.advancedutilities.system.ModuleManager;
+import com.duox.advancedutilities.system.settings.EnchantmentListSetting;
+import com.duox.advancedutilities.system.settings.Setting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.awt.Color;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
-/*
- * Main GUI screen for the Advanced Utilities mod.
- * Displays modules organized by category and allows configuration of module settings.
+/**
+ * Redesigned utility GUI using a centered two-pane layout,
+ * compact module cards, and a softer modern visual hierarchy.
  */
 public class UtilityGui extends Screen {
 
-    private static final int TOP_BAR_HEIGHT = Constants.GUI_TOP_BAR_HEIGHT;
-    private static final int SIDEBAR_WIDTH = Constants.GUI_SIDEBAR_WIDTH;
-    private static final int MODULE_BTN_HEIGHT = Constants.GUI_MODULE_BTN_HEIGHT;
-    private static final int MODULE_BTN_WIDTH = Constants.GUI_MODULE_BTN_WIDTH;
-    private static final int PADDING = Constants.GUI_PADDING;
+    private static final int OUTER_MARGIN = 18;
+    private static final int HEADER_HEIGHT = 38;
+    private static final int SIDEBAR_WIDTH = 228;
+    private static final int PANEL_GAP = 14;
+    private static final int INNER_PAD = 16;
+    private static final int MODULE_ROW_HEIGHT = 28;
+    private static final int MODULE_GAP = 6;
+    private static final int SETTING_GAP = 8;
+    private static final int TAB_HEIGHT = 22;
 
     private int currentTabIndex = 0;
     private final List<Category> categories = new ArrayList<>();
-    private List<Module> activeModulesSnapshot;
-    private Module selectedModule = null;
+    private Module selectedModule;
 
     private final List<AbstractWidget> dynamicWidgets = new ArrayList<>();
     private final List<SettingWidget> customRenderWidgets = new ArrayList<>();
+
+    private int panelX;
+    private int panelY;
+    private int panelW;
+    private int panelH;
+    private int contentX;
+    private int contentY;
+    private int contentW;
 
     public UtilityGui() {
         super(Component.literal("Advanced Utilities"));
     }
 
-    // ... (init method remains unchanged) ...
     @Override
     protected void init() {
         super.init();
         categories.clear();
-        Collections.addAll(categories, Category.values());
+        categories.addAll(Arrays.asList(Category.values()));
 
-        activeModulesSnapshot = ModuleManager.INSTANCE.getModules().stream()
-                .filter(Module::isEnabled)
-                .collect(Collectors.toList());
+        panelW = Math.min(920, this.width - (OUTER_MARGIN * 2));
+        panelH = Math.min(620, this.height - (OUTER_MARGIN * 2));
+        panelX = (this.width - panelW) / 2;
+        panelY = (this.height - panelH) / 2;
 
-        if (selectedModule != null) {
-            initSettingsPanel(selectedModule);
+        contentX = panelX + SIDEBAR_WIDTH + PANEL_GAP;
+        contentY = panelY + HEADER_HEIGHT + INNER_PAD;
+        contentW = panelW - SIDEBAR_WIDTH - PANEL_GAP - (INNER_PAD * 2);
+
+        if (selectedModule == null) {
+            List<Module> modules = getModulesToDisplay();
+            if (!modules.isEmpty()) {
+                selectedModule = modules.get(0);
+            }
         }
+        initSettingsPanel(selectedModule);
+    }
+
+    private List<Module> getModulesToDisplay() {
+        return currentTabIndex == 0
+                ? ModuleManager.INSTANCE.getModules()
+                : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
     }
 
     private void initSettingsPanel(Module module) {
-        // Clear old widgets
-        for (AbstractWidget w : dynamicWidgets) this.removeWidget(w);
+        for (AbstractWidget widget : dynamicWidgets) {
+            this.removeWidget(widget);
+        }
         dynamicWidgets.clear();
         customRenderWidgets.clear();
 
         this.selectedModule = module;
         if (module == null) return;
 
-        int startX = SIDEBAR_WIDTH + Constants.GUI_SETTINGS_START_X_OFFSET;
-        int startY = TOP_BAR_HEIGHT + Constants.GUI_SETTINGS_START_Y_OFFSET;
-        int widgetWidth = Constants.GUI_SETTINGS_WIDGET_WIDTH;
+        int startX = contentX + INNER_PAD;
+        int startY = contentY + 40;
+        int widgetWidth = contentW - (INNER_PAD * 2);
 
-        // Add Keybind Widget
-        KeybindWidget keybindWidget = new KeybindWidget(startX, startY, widgetWidth, 20, module.getKeyMapping());
+        KeybindWidget keybindWidget = new KeybindWidget(startX, startY, widgetWidth, 24, module.getKeyMapping());
         this.addRenderableWidget(keybindWidget);
         this.dynamicWidgets.add(keybindWidget);
-        startY += 20 + PADDING;
+        startY += 24 + SETTING_GAP;
 
         for (Setting<?> setting : module.getSettings()) {
-            int height = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
+            int defaultHeight = (setting instanceof com.duox.advancedutilities.system.settings.BlockListSetting
                     || setting instanceof com.duox.advancedutilities.system.settings.EntityListSetting
                     || setting instanceof com.duox.advancedutilities.system.settings.ItemListSetting
-                    || setting instanceof com.duox.advancedutilities.system.settings.EnchantmentListSetting) 
-                    ? Constants.GUI_LIST_WIDGET_HEIGHT : 20;
+                    || setting instanceof EnchantmentListSetting)
+                    ? 74
+                    : 24;
 
-            SettingWidget widget = com.duox.advancedutilities.gui.factory.WidgetFactory.create(setting, startX, startY, widgetWidth, height);
+            SettingWidget widget = WidgetFactory.create(setting, startX, startY, widgetWidth, defaultHeight);
+            if (widget == null) continue;
 
-            if (widget != null) {
-                // Pass a callback that re-runs initSettingsPanel to refresh layout
-                widget.init(w -> {
-                    this.addRenderableWidget(w);
-                    this.dynamicWidgets.add(w);
-                }, () -> this.initSettingsPanel(this.selectedModule));
+            widget.init(w -> {
+                this.addRenderableWidget(w);
+                this.dynamicWidgets.add(w);
+            }, () -> this.initSettingsPanel(this.selectedModule));
 
-                this.customRenderWidgets.add(widget);
-                startY += widget.getHeight() + PADDING;
-            }
+            this.customRenderWidgets.add(widget);
+            startY += widget.getHeight() + SETTING_GAP;
         }
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick){
-
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        guiGraphics.fill(0, 0, this.width, this.height, UiTheme.SCREEN_DIM);
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
 
-        // 1. Draw Background
-        guiGraphics.fill(0, TOP_BAR_HEIGHT, SIDEBAR_WIDTH, this.height, 0xAA000000);
-        guiGraphics.fill(SIDEBAR_WIDTH, TOP_BAR_HEIGHT, this.width, this.height, 0x80000000);
-        guiGraphics.vLine(SIDEBAR_WIDTH, TOP_BAR_HEIGHT, this.height, 0xFFFFFFFF);
-        guiGraphics.hLine(0, this.width, TOP_BAR_HEIGHT, 0xFFFFFFFF);
-        guiGraphics.drawString(this.font, "Adv. Utils", 10, 11, 0xFFFFFF, false);
-
-        // 2. Draw Tabs
-        int tabX = 80;
-        boolean isActiveTab = (currentTabIndex == 0);
-        drawTabButton(guiGraphics, tabX, 2, 60, 26, "ACTIVE", isActiveTab, mouseX, mouseY);
-        tabX += 65;
-        for (int i = 0; i < categories.size(); i++) {
-            boolean isSelected = (currentTabIndex == i + 1);
-            drawTabButton(guiGraphics, tabX, 2, 60, 26, categories.get(i).name(), isSelected, mouseX, mouseY);
-            tabX += 65;
-        }
-
-        // 3. Draw Module List
+        drawFrame(guiGraphics, mouseX, mouseY);
+        drawTabs(guiGraphics, mouseX, mouseY);
         renderModuleList(guiGraphics, mouseX, mouseY);
-
-        // 4. Draw Settings
-        if (selectedModule != null) {
-            guiGraphics.drawString(this.font, "Settings: " + selectedModule.getName(), SIDEBAR_WIDTH + 20, TOP_BAR_HEIGHT + 15, 0xFFFF00, false);
-            for (SettingWidget w : customRenderWidgets) {
-                w.render(guiGraphics, mouseX, mouseY, partialTick);
-            }
-        } else {
-            guiGraphics.drawCenteredString(this.font, "Select a module to edit settings",
-                    SIDEBAR_WIDTH + (this.width - SIDEBAR_WIDTH) / 2, this.height / 2, 0xAAAAAA);
-        }
+        renderSettingsPane(guiGraphics, mouseX, mouseY, partialTick);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderModuleList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        List<Module> modulesToDisplay = (currentTabIndex == 0) ? activeModulesSnapshot : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
-        int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2;
-        int btnY = TOP_BAR_HEIGHT + 10;
+    private void drawFrame(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        UiTheme.drawPanel(guiGraphics, panelX, panelY, panelW, panelH, UiTheme.PANEL, UiTheme.BORDER);
+        guiGraphics.fill(panelX, panelY, panelX + panelW, panelY + HEADER_HEIGHT, UiTheme.PANEL_ALT);
+        guiGraphics.fill(panelX + SIDEBAR_WIDTH, panelY + HEADER_HEIGHT, panelX + SIDEBAR_WIDTH + 1, panelY + panelH, UiTheme.BORDER_SOFT);
+        guiGraphics.fill(panelX, panelY + HEADER_HEIGHT, panelX + panelW, panelY + HEADER_HEIGHT + 1, UiTheme.BORDER_SOFT);
 
+        guiGraphics.drawString(this.font, "Advanced Utilities", panelX + 14, panelY + 9, UiTheme.TEXT_PRIMARY, false);
+        guiGraphics.drawString(this.font, "Slim config panel", panelX + 14, panelY + 20, UiTheme.TEXT_FAINT, false);
+
+        int rightHintWidth = this.font.width("ESC close");
+        guiGraphics.drawString(this.font, "ESC close", panelX + panelW - 14 - rightHintWidth, panelY + 14, UiTheme.TEXT_FAINT, false);
+
+        UiTheme.drawSectionLabel(guiGraphics, this.font, "MODULES", panelX + 14, panelY + HEADER_HEIGHT + 10);
+    }
+
+    private void drawTabs(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int tabCount = categories.size() + 1;
+        int tabStartX = panelX + 160;
+        int availableW = panelW - 180;
+        int tabWidth = Math.max(48, Math.min(78, (availableW - (tabCount - 1) * 6) / Math.max(tabCount, 1)));
+        int x = tabStartX;
+        int y = panelY + 8;
+
+        drawTab(guiGraphics, x, y, tabWidth, TAB_HEIGHT, "ALL", currentTabIndex == 0, mouseX, mouseY);
+        x += tabWidth + 6;
+
+        for (int i = 0; i < categories.size(); i++) {
+            drawTab(guiGraphics, x, y, tabWidth, TAB_HEIGHT, categories.get(i).name(), currentTabIndex == i + 1, mouseX, mouseY);
+            x += tabWidth + 6;
+        }
+    }
+
+    private void drawTab(GuiGraphics guiGraphics, int x, int y, int width, int height, String label, boolean selected, int mouseX, int mouseY) {
+        boolean hovered = UiTheme.isInside(mouseX, mouseY, x, y, width, height);
+        int bg = selected ? UiTheme.ACCENT_SOFT : hovered ? UiTheme.PANEL_HOVER : UiTheme.PANEL_SOFT;
+        UiTheme.drawPanel(guiGraphics, x, y, width, height, bg, selected ? UiTheme.ACCENT : UiTheme.BORDER_SOFT);
+        guiGraphics.drawCenteredString(this.font, label, x + width / 2, y + 7, selected ? UiTheme.TEXT_PRIMARY : UiTheme.TEXT_MUTED);
+    }
+
+    private void renderModuleList(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int x = panelX + 12;
+        int y = panelY + HEADER_HEIGHT + 24;
+        int width = SIDEBAR_WIDTH - 24;
+
+        List<Module> modulesToDisplay = getModulesToDisplay();
         if (modulesToDisplay.isEmpty()) {
-            guiGraphics.drawCenteredString(this.font, "Empty", SIDEBAR_WIDTH / 2, btnY, 0xAAAAAA);
+            guiGraphics.drawString(this.font, "No modules in this category", x, y + 4, UiTheme.TEXT_FAINT, false);
             return;
         }
 
         for (Module mod : modulesToDisplay) {
-            boolean isHovered = isInside(mouseX, mouseY, btnX, btnY, MODULE_BTN_WIDTH, MODULE_BTN_HEIGHT);
-            boolean isSelected = (mod == selectedModule);
-            int color = mod.isEnabled() ? 0xFF2ECC71 : 0xFFE74C3C;
-            if (isHovered) color = darken(color);
+            boolean hovered = UiTheme.isInside(mouseX, mouseY, x, y, width, MODULE_ROW_HEIGHT);
+            boolean selected = mod == selectedModule;
 
-            guiGraphics.fill(btnX, btnY, btnX + MODULE_BTN_WIDTH, btnY + MODULE_BTN_HEIGHT, color);
-            if (isSelected) guiGraphics.renderOutline(btnX - 1, btnY - 1, MODULE_BTN_WIDTH + 2, MODULE_BTN_HEIGHT + 2, 0xFF3498DB);
-            guiGraphics.drawCenteredString(this.font, mod.getName(), btnX + MODULE_BTN_WIDTH / 2, btnY + 7, 0xFFFFFF);
-            if (isHovered) guiGraphics.renderTooltip(this.font, Component.literal(mod.getDescription()), mouseX, mouseY);
-            btnY += MODULE_BTN_HEIGHT + PADDING;
+            int bg = selected ? UiTheme.PANEL_ACTIVE : hovered ? UiTheme.PANEL_HOVER : UiTheme.PANEL_SOFT;
+            UiTheme.drawPanel(guiGraphics, x, y, width, MODULE_ROW_HEIGHT, bg, selected ? UiTheme.ACCENT : UiTheme.BORDER_SOFT);
+
+            int dotColor = mod.isEnabled() ? UiTheme.SUCCESS : UiTheme.TEXT_FAINT;
+            guiGraphics.fill(x + 8, y + 11, x + 14, y + 17, dotColor);
+            guiGraphics.drawString(this.font, mod.getName(), x + 20, y + 10, UiTheme.TEXT_PRIMARY, false);
+
+            int pillW = 36;
+            int pillX = x + width - pillW - 8;
+            UiTheme.drawPill(guiGraphics, pillX, y + 6, pillW, 16,
+                    mod.isEnabled() ? UiTheme.withAlpha(UiTheme.SUCCESS, 40) : UiTheme.PANEL_ALT,
+                    mod.isEnabled() ? UiTheme.SUCCESS : UiTheme.TEXT_MUTED,
+                    this.font,
+                    mod.isEnabled() ? "ON" : "OFF");
+
+            if (hovered) {
+                guiGraphics.renderTooltip(this.font, Component.literal(mod.getDescription()), mouseX, mouseY);
+            }
+            y += MODULE_ROW_HEIGHT + MODULE_GAP;
+        }
+    }
+
+    private void renderSettingsPane(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        int paneX = contentX;
+        int paneY = panelY + HEADER_HEIGHT + 10;
+        int paneH = panelH - HEADER_HEIGHT - 20;
+
+        UiTheme.drawPanel(guiGraphics, paneX, paneY, contentW, paneH, UiTheme.PANEL_SOFT, UiTheme.BORDER_SOFT);
+
+        if (selectedModule == null) {
+            guiGraphics.drawCenteredString(this.font, "Select a module", paneX + contentW / 2, paneY + paneH / 2 - 5, UiTheme.TEXT_MUTED);
+            return;
+        }
+
+        guiGraphics.drawString(this.font, selectedModule.getName(), paneX + INNER_PAD, paneY + 12, UiTheme.TEXT_PRIMARY, false);
+        guiGraphics.drawString(this.font, selectedModule.getDescription(), paneX + INNER_PAD, paneY + 24, UiTheme.TEXT_FAINT, false);
+
+        UiTheme.drawPill(guiGraphics,
+                paneX + contentW - 76,
+                paneY + 10,
+                56,
+                18,
+                selectedModule.isEnabled() ? UiTheme.withAlpha(UiTheme.SUCCESS, 36) : UiTheme.PANEL_ALT,
+                selectedModule.isEnabled() ? UiTheme.SUCCESS : UiTheme.TEXT_MUTED,
+                this.font,
+                selectedModule.isEnabled() ? "ACTIVE" : "DISABLED");
+
+        for (SettingWidget widget : customRenderWidgets) {
+            widget.render(guiGraphics, mouseX, mouseY, partialTick);
         }
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (mouseX > SIDEBAR_WIDTH) {
-            for (SettingWidget w : customRenderWidgets) {
-                if (w.mouseClicked(mouseX, mouseY, button)) return true;
-            }
-            if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        }
-
-        if (mouseY < TOP_BAR_HEIGHT) {
-            int tabX = 80;
-            if (isInside(mouseX, mouseY, tabX, 2, 60, 26)) { currentTabIndex = 0; return true; }
-            tabX += 65;
-            for (int i = 0; i < categories.size(); i++) {
-                if (isInside(mouseX, mouseY, tabX, 2, 60, 26)) { currentTabIndex = i + 1; return true; }
-                tabX += 65;
-            }
-        }
-        else if (mouseX <= SIDEBAR_WIDTH) {
-            List<Module> modulesToDisplay = (currentTabIndex == 0) ? activeModulesSnapshot : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
-            int btnX = (SIDEBAR_WIDTH - MODULE_BTN_WIDTH) / 2;
-            int btnY = TOP_BAR_HEIGHT + 10;
-            for (Module mod : modulesToDisplay) {
-                if (isInside(mouseX, mouseY, btnX, btnY, MODULE_BTN_WIDTH, MODULE_BTN_HEIGHT)) {
-                    if (button == 0) { mod.toggle(); ConfigManager.getInstance().save(); }
-                    else if (button == 1 || mod == selectedModule) { initSettingsPanel(mod); }
+        if (mouseY >= panelY + HEADER_HEIGHT && mouseX > panelX + SIDEBAR_WIDTH + PANEL_GAP) {
+            for (SettingWidget widget : customRenderWidgets) {
+                if (widget.mouseClicked(mouseX, mouseY, button)) {
                     return true;
                 }
-                btnY += MODULE_BTN_HEIGHT + PADDING;
+            }
+            if (super.mouseClicked(mouseX, mouseY, button)) {
+                return true;
             }
         }
-        return false;
-    }
 
-    private boolean isInside(double mx, double my, int x, int y, int w, int h) { return mx >= x && mx <= x + w && my >= y && my <= y + h; }
-    private int darken(int color) { Color c = new Color(color); return new Color((int)(c.getRed() * 0.7), (int)(c.getGreen() * 0.7), (int)(c.getBlue() * 0.7)).getRGB(); }
-    private void drawTabButton(GuiGraphics g, int x, int y, int w, int h, String t, boolean s, int mx, int my) {
-        int c = s ? 0xFF3498DB : 0xFF2C3E50;
-        if (isInside(mx, my, x, y, w, h) && !s) c = 0xFF34495E;
-        g.fill(x, y, x + w, y + h, c);
-        g.drawCenteredString(this.font, t, x + w / 2, y + 8, s ? 0xFFFF00 : 0xAAAAAA);
+        if (mouseY >= panelY && mouseY <= panelY + HEADER_HEIGHT) {
+            int tabCount = categories.size() + 1;
+            int tabStartX = panelX + 160;
+            int availableW = panelW - 180;
+            int tabWidth = Math.max(48, Math.min(78, (availableW - (tabCount - 1) * 6) / Math.max(tabCount, 1)));
+            int x = tabStartX;
+            int y = panelY + 8;
+
+            if (UiTheme.isInside(mouseX, mouseY, x, y, tabWidth, TAB_HEIGHT)) {
+                currentTabIndex = 0;
+                if (!getModulesToDisplay().contains(selectedModule)) {
+                    selectedModule = getModulesToDisplay().isEmpty() ? null : getModulesToDisplay().get(0);
+                }
+                initSettingsPanel(selectedModule);
+                return true;
+            }
+            x += tabWidth + 6;
+
+            for (int i = 0; i < categories.size(); i++) {
+                if (UiTheme.isInside(mouseX, mouseY, x, y, tabWidth, TAB_HEIGHT)) {
+                    currentTabIndex = i + 1;
+                    if (!getModulesToDisplay().contains(selectedModule)) {
+                        selectedModule = getModulesToDisplay().isEmpty() ? null : getModulesToDisplay().get(0);
+                    }
+                    initSettingsPanel(selectedModule);
+                    return true;
+                }
+                x += tabWidth + 6;
+            }
+        }
+
+        int rowX = panelX + 12;
+        int rowY = panelY + HEADER_HEIGHT + 24;
+        int rowW = SIDEBAR_WIDTH - 24;
+        for (Module mod : getModulesToDisplay()) {
+            if (UiTheme.isInside(mouseX, mouseY, rowX, rowY, rowW, MODULE_ROW_HEIGHT)) {
+                int pillW = 36;
+                int pillX = rowX + rowW - pillW - 8;
+                if (UiTheme.isInside(mouseX, mouseY, pillX, rowY + 6, pillW, 16)) {
+                    mod.toggle();
+                    ConfigManager.getInstance().save();
+                } else {
+                    initSettingsPanel(mod);
+                }
+                return true;
+            }
+            rowY += MODULE_ROW_HEIGHT + MODULE_GAP;
+        }
+
+        return false;
     }
 }

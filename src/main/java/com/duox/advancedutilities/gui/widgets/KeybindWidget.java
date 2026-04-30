@@ -1,11 +1,10 @@
 package com.duox.advancedutilities.gui.widgets;
-/*
- * Widget for configuring keybinds.
- * Supports keyboard and mouse inputs.
- */
+
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -15,7 +14,6 @@ public class KeybindWidget extends Button {
     private boolean listening = false;
 
     public KeybindWidget(int x, int y, int width, int height, KeyMapping keyMapping) {
-        // Pass a dummy action, we override onPress
         super(x, y, width, height, Component.empty(), b -> {}, DEFAULT_NARRATION);
         this.keyMapping = keyMapping;
         this.updateMessage();
@@ -29,12 +27,21 @@ public class KeybindWidget extends Button {
 
     private void updateMessage() {
         if (listening) {
-            this.setMessage(Component.literal("> Press Key <").withStyle(net.minecraft.ChatFormatting.YELLOW));
+            this.setMessage(Component.literal("Press keyboard or mouse input"));
         } else {
-            InputConstants.Key key = keyMapping.getKey();
-            String keyName = key.getDisplayName().getString();
-            this.setMessage(Component.literal("Bind: " + keyName).withStyle(net.minecraft.ChatFormatting.WHITE));
+            this.setMessage(Component.literal(keyMapping.getKey().getDisplayName().getString()));
         }
+    }
+
+    @Override
+    protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        Font font = Minecraft.getInstance().font;
+        int bg = this.isHoveredOrFocused() ? UiTheme.PANEL_HOVER : UiTheme.PANEL_ALT;
+        UiTheme.drawPanel(guiGraphics, getX(), getY(), width, height, bg, listening ? UiTheme.ACCENT : UiTheme.BORDER_SOFT);
+
+        guiGraphics.drawString(font, "Keybind", getX() + 10, getY() + (height - 8) / 2, UiTheme.TEXT_PRIMARY, false);
+        guiGraphics.drawString(font, getMessage(), getX() + width - 10 - font.width(getMessage()), getY() + (height - 8) / 2,
+                listening ? UiTheme.ACCENT : UiTheme.TEXT_MUTED, false);
     }
 
     @Override
