@@ -114,24 +114,21 @@ public class UtilityGui extends Screen {
     }
 
     private List<Module> getModulesToDisplay() {
-        List<Module> base = currentTabIndex == 0
+        List<Module> base = new ArrayList<>(currentTabIndex == 0
                 ? ModuleManager.INSTANCE.getModules()
-                : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1));
+                : ModuleManager.INSTANCE.getModulesByCategory(categories.get(currentTabIndex - 1)));
 
         String query = getSearchQuery();
-        if (currentTabIndex != 0 || query.isEmpty()) {
-            return base;
+        if (currentTabIndex == 0 && !query.isEmpty()) {
+            base.removeIf(module -> {
+                String name = module.getName() == null ? "" : module.getName().toLowerCase(Locale.ROOT);
+                String description = module.getDescription() == null ? "" : module.getDescription().toLowerCase(Locale.ROOT);
+                return !name.contains(query) && !description.contains(query);
+            });
         }
 
-        List<Module> filtered = new ArrayList<>();
-        for (Module module : base) {
-            String name = module.getName() == null ? "" : module.getName().toLowerCase(Locale.ROOT);
-            String description = module.getDescription() == null ? "" : module.getDescription().toLowerCase(Locale.ROOT);
-            if (name.contains(query) || description.contains(query)) {
-                filtered.add(module);
-            }
-        }
-        return filtered;
+        base.sort((a, b) -> Boolean.compare(b.isEnabled(), a.isEnabled()));
+        return base;
     }
 
     private String getSearchQuery() {
@@ -258,10 +255,10 @@ public class UtilityGui extends Screen {
         guiGraphics.fill(panelX, panelY + HEADER_HEIGHT, panelX + panelW, panelY + HEADER_HEIGHT + 1, UiTheme.BORDER_SOFT);
 
         guiGraphics.drawString(this.font, "Advanced Utilities", panelX + 14, panelY + 9, UiTheme.TEXT_PRIMARY, false);
-        guiGraphics.drawString(this.font, "Slim config panel", panelX + 14, panelY + 20, UiTheme.TEXT_MUTED, false);
+        guiGraphics.drawString(this.font, "Control panel", panelX + 14, panelY + 20, UiTheme.TEXT_MUTED, false);
 
-        int rightHintWidth = this.font.width("ESC close");
-        guiGraphics.drawString(this.font, "ESC close", panelX + panelW - 14 - rightHintWidth, panelY + 14, UiTheme.TEXT_MUTED, false);
+        int rightHintWidth = this.font.width("ESC");
+        guiGraphics.drawString(this.font, "ESC", panelX + panelW - 14 - rightHintWidth, panelY + 14, UiTheme.TEXT_MUTED, false);
 
         UiTheme.drawSectionLabel(guiGraphics, this.font, "MODULES", panelX + 14, panelY + HEADER_HEIGHT + 10);
     }
@@ -301,8 +298,13 @@ public class UtilityGui extends Screen {
         boolean hovered = UiTheme.isInside(mouseX, mouseY, boxX, boxY, boxW, SEARCH_HEIGHT);
         int bg = hovered || moduleSearchBox.isFocused() ? UiTheme.PANEL_HOVER : UiTheme.PANEL_SOFT;
 
-        UiTheme.drawPanel(guiGraphics, boxX, boxY, boxW, SEARCH_HEIGHT, bg, moduleSearchBox.isFocused() ? UiTheme.ACCENT : UiTheme.BORDER_SOFT);
-        guiGraphics.drawString(this.font, "Search", boxX + 8, boxY + 7, UiTheme.TEXT_MUTED, false);
+        UiTheme.drawPanel(guiGraphics, boxX, boxY, boxW, SEARCH_HEIGHT, bg,
+                moduleSearchBox.isFocused() ? UiTheme.ACCENT : UiTheme.BORDER_SOFT);
+
+        if (moduleSearchBox.getValue().isEmpty() && !moduleSearchBox.isFocused()) {
+            guiGraphics.drawString(this.font, "Search", boxX + 8, boxY + 7, UiTheme.TEXT_MUTED, false);
+        }
+
         moduleSearchBox.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
@@ -402,8 +404,13 @@ public class UtilityGui extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (moduleSearchBox != null && moduleSearchBox.visible && moduleSearchBox.mouseClicked(mouseX, mouseY, button)) {
-            return true;
+        if (moduleSearchBox != null && moduleSearchBox.visible) {
+            if (moduleSearchBox.mouseClicked(mouseX, mouseY, button)) {
+                this.setFocused(moduleSearchBox);
+                return true;
+            } else {
+                moduleSearchBox.setFocused(false);
+            }
         }
 
         if (isInsideSettingsViewport(mouseX, mouseY)) {
