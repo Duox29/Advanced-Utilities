@@ -7,9 +7,7 @@
   "mixins": [
     "IMinecraftAccessor",
     "IMultiPlayerGameModeAccessor",
-    "MixinClientPacketListener",
     "MixinConnectScreen",
-    "MixinContainerScreen",
     "MixinDisconnectedScreen",
     "MixinGameRenderer",
     "MixinMinecraft"
