@@ -52,7 +52,7 @@ public class ItemListWidget extends SettingWidget {
         UiTheme.styleEditBox(idInput);
         widgetConsumer.accept(idInput);
 
-        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 20, 68, 18, Component.literal("Add"), b -> {
+        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 18, 68, 20, Component.literal("Add"), b -> {
             String val = idInput.getValue();
             if (val == null || val.isEmpty()) return;
             ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
@@ -72,7 +72,7 @@ public class ItemListWidget extends SettingWidget {
         //guiGraphics.drawString(mc.font, "LMB toggle  •  RMB remove", x + width - 100, y + 4, UiTheme.TEXT_FAINT, false);
         UiTheme.drawInset(guiGraphics, x, y + 18, width, 20);
 
-        int startX = x + 2;
+        int startX = x;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
         int currentY = startY;
@@ -103,7 +103,7 @@ public class ItemListWidget extends SettingWidget {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int startX = x + 2;
+        int startX = x;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
         int currentY = startY;

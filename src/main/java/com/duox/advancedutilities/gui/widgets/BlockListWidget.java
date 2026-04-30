@@ -48,12 +48,12 @@ public class BlockListWidget extends SettingWidget {
         this.onRefreshCallback = onRefresh;
         Minecraft mc = Minecraft.getInstance();
 
-        idInput = new EditBox(mc.font, x + 1, y + 20, width - 96, 18, Component.literal("minecraft:stone"));
+        idInput = new EditBox(mc.font, x + 1, y + 23, width - 68, 18, Component.literal("minecraft:stone"));
         idInput.setMaxLength(256);
         UiTheme.styleEditBox(idInput);
         widgetConsumer.accept(idInput);
 
-        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 20, 68, 18, Component.literal("Add"), b -> {
+        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 18, 68, 20, Component.literal("Add"), b -> {
             String val = idInput.getValue();
             if (val == null || val.isEmpty()) return;
             ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
@@ -72,20 +72,20 @@ public class BlockListWidget extends SettingWidget {
         guiGraphics.drawString(mc.font, setting.getName(), x, y + 4, UiTheme.TEXT_PRIMARY, false);
         //guiGraphics.drawString(mc.font, "LMB toggle  •  RMB remove  •  Pick from world", x + width - 120, y + 4, UiTheme.TEXT_FAINT, false);
 
-        UiTheme.drawInset(guiGraphics, x, y + 18, width - 74, 20);
-        int pickX = x + width - 52;
+        UiTheme.drawInset(guiGraphics, x, y + 18, width, 20);
+        int pickX = x + width - 68;
         int pickY = y;
-        UiTheme.drawPill(guiGraphics, pickX, pickY, 52, 16,
-                UiTheme.isInside(mouseX, mouseY, pickX, pickY, 52, 16) ? UiTheme.PANEL_HOVER : UiTheme.PANEL_SOFT,
+        UiTheme.drawPill(guiGraphics, pickX, pickY, 68, 16,
+                UiTheme.isInside(mouseX, mouseY, pickX, pickY, 68, 16) ? UiTheme.PANEL_HOVER : UiTheme.PANEL_SOFT,
                 UiTheme.TEXT_MUTED,
                 mc.font,
-                "PICK");
+                "[+]");
 
         renderGrid(guiGraphics, mouseX, mouseY, mc);
     }
 
     private void renderGrid(GuiGraphics guiGraphics, int mouseX, int mouseY, Minecraft mc) {
-        int startX = x + 2;
+        int startX = x;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
         int currentY = startY;
@@ -116,13 +116,13 @@ public class BlockListWidget extends SettingWidget {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int pickX = x + width - 52;
-        if (UiTheme.isInside(mouseX, mouseY, pickX, y, 52, 16)) {
+        int pickX = x + width - 68;
+        if (UiTheme.isInside(mouseX, mouseY, pickX, y, 68, 16)) {
             BlockSelector.INSTANCE.startSelecting(setting);
             return true;
         }
 
-        int startX = x + 2;
+        int startX = x;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
         int currentY = startY;

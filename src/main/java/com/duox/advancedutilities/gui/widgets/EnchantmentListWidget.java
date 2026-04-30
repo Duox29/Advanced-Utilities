@@ -54,9 +54,9 @@ public class EnchantmentListWidget extends SettingWidget {
         this.onRefreshCallback = onRefresh;
         Minecraft mc = Minecraft.getInstance();
 
-        idInput = new EditBox(mc.font, x + 1, y + 20, width - 68, 18, Component.literal("minecraft:sharpness"));
-        levelInput = new EditBox(mc.font, x + 1, y + 42, 76, 18, Component.literal("Level"));
-        priceInput = new EditBox(mc.font, x + 81, y + 42, 76, 18, Component.literal("Price"));
+        idInput = new EditBox(mc.font, x + 2, y + 23, width - 69, 18, Component.literal("minecraft:sharpness"));
+        levelInput = new EditBox(mc.font, x + 2, y + 46, 76, 18, Component.literal("Level"));
+        priceInput = new EditBox(mc.font, x + 83, y + 46, 76, 18, Component.literal("Price"));
         levelInput.setValue("1");
         priceInput.setValue("64");
         UiTheme.styleEditBox(idInput);
@@ -66,7 +66,7 @@ public class EnchantmentListWidget extends SettingWidget {
         widgetConsumer.accept(levelInput);
         widgetConsumer.accept(priceInput);
 
-        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 20, 68, 40, Component.literal("Add"), b -> {
+        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 18, 68, 42, Component.literal("Add"), b -> {
             String val = idInput.getValue();
             if (val == null || val.isEmpty()) return;
 
@@ -111,11 +111,11 @@ public class EnchantmentListWidget extends SettingWidget {
         guiGraphics.drawString(mc.font, setting.getName(), x, y + 4, UiTheme.TEXT_PRIMARY, false);
         //guiGraphics.drawString(mc.font, "LMB toggle  •  RMB remove", x + width - 100, y + 4, UiTheme.TEXT_FAINT, false);
 
-        UiTheme.drawInset(guiGraphics, x, y + 18, width - 68, 20);
+        UiTheme.drawInset(guiGraphics, x, y + 18, width - 67, 20);
         UiTheme.drawInset(guiGraphics, x, y + 40, 76, 20);
         UiTheme.drawInset(guiGraphics, x + 80, y + 40, 76, 20);
 
-        int startX = x + 2;
+        int startX = x;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
         int currentY = startY;
@@ -161,7 +161,7 @@ public class EnchantmentListWidget extends SettingWidget {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int startX = x + 2;
+        int startX = x;
         int startY = y + INPUT_AREA_HEIGHT;
         int currentX = startX;
         int currentY = startY;

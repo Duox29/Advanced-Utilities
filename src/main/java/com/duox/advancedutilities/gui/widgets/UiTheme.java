@@ -21,14 +21,14 @@ public final class UiTheme {
     public static final int PANEL_HOVER = 0xFA202733;
     public static final int PANEL_ACTIVE = 0xFA243042;
     public static final int BORDER = 0xFF2B3442;
-    public static final int BORDER_SOFT = 0xCC252D38;
+    public static final int BORDER_SOFT = 0xCC2B3644;
     public static final int ACCENT = 0xFF6EA8FE;
     public static final int ACCENT_SOFT = 0x553E7BDA;
     public static final int SUCCESS = 0xFF58D68D;
     public static final int DANGER = 0xFFF07178;
-    public static final int TEXT_PRIMARY = 0xFFE8EEF7;
-    public static final int TEXT_MUTED = 0xFF98A3B3;
-    public static final int TEXT_FAINT = 0xFF748092;
+    public static final int TEXT_PRIMARY = 0xFFF4F8FF;
+    public static final int TEXT_MUTED = 0xFFC1CBD9;
+    public static final int TEXT_FAINT = 0xFF9AA7BA;
 
     private UiTheme() {}
 
@@ -65,7 +65,6 @@ public final class UiTheme {
         editBox.setBordered(false);
         editBox.setTextColor(TEXT_PRIMARY);
         editBox.setTextColorUneditable(TEXT_MUTED);
-        editBox.setResponder(s -> {});
     }
 }
 
@@ -175,8 +174,8 @@ final class SlimSlider extends AbstractSliderButton {
         String valueText = String.format("%.2f", actualValue());
         guiGraphics.drawString(font, valueText, x + width - 10 - font.width(valueText), y + 6, UiTheme.TEXT_MUTED, false);
 
-        int trackX = x + 10;
-        int trackY = y + height - 9;
+        int trackX = x + 11;
+        int trackY = y + height - 6;
         int trackW = width - 20;
         guiGraphics.fill(trackX, trackY, trackX + trackW, trackY + 2, UiTheme.BORDER);
 

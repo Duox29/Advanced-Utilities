@@ -48,12 +48,12 @@ public class EntityListWidget extends SettingWidget {
         this.onRefreshCallback = onRefresh;
         Minecraft mc = Minecraft.getInstance();
 
-        idInput = new EditBox(mc.font, x + 1, y + 20, width - 68, 18, Component.literal("minecraft:cow"));
+        idInput = new EditBox(mc.font, x + 1, y + 23, width - 68, 18, Component.literal("minecraft:cow"));
         idInput.setMaxLength(256);
         UiTheme.styleEditBox(idInput);
         widgetConsumer.accept(idInput);
 
-        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 20, 68, 18, Component.literal("Add"), b -> {
+        widgetConsumer.accept(new SlimActionButton(x + width - 68, y + 18, 68, 20, Component.literal("Add"), b -> {
             String val = idInput.getValue();
             if (val == null || val.isEmpty()) return;
             ResourceLocation rl = ResourceLocation.tryParse(val.contains(":") ? val : "minecraft:" + val);
