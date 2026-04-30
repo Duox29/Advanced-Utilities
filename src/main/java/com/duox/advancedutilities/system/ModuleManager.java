@@ -34,6 +34,7 @@ public class ModuleManager {
 
         // World category modules
         register(new VillagerRoller());
+        register(new AutoFeed());
 
         // Misc category modules
         register(new AutoReconnect());

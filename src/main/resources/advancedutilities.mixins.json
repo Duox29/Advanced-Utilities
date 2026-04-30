@@ -10,7 +10,8 @@
     "MixinConnectScreen",
     "MixinDisconnectedScreen",
     "MixinGameRenderer",
-    "MixinMinecraft"
+    "MixinMinecraft",
+    "MixinMouseHandler"
   ],
   "injectors": {
     "defaultRequire": 1

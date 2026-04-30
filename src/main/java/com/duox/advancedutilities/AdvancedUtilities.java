@@ -1,6 +1,7 @@
 package com.duox.advancedutilities;
 
 import com.duox.advancedutilities.gui.UtilityGui;
+import com.duox.advancedutilities.modules.Zoom;
 import com.duox.advancedutilities.system.*;
 import com.duox.advancedutilities.system.Module;
 import net.minecraft.client.KeyMapping;
@@ -75,6 +76,17 @@ public class AdvancedUtilities {
     public void onKeyInput(InputEvent.Key event) {
         if (OPEN_GUI_KEY.consumeClick()) {
             Minecraft.getInstance().setScreen(new UtilityGui());
+        }
+    }
+    @SubscribeEvent
+    public void onMouseScroll(InputEvent.MouseScrollingEvent event) {
+        Zoom zoom = ModuleManager.INSTANCE.getModule(Zoom.class);
+        if (zoom != null && zoom.isEnabled()) {
+            double scrollAmount = event.getScrollDeltaY();
+            if (scrollAmount != 0) {
+                zoom.onMouseScroll(scrollAmount);
+                event.setCanceled(true);
+            }
         }
     }
 }
