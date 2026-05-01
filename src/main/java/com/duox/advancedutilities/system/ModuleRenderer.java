@@ -1,26 +1,17 @@
 package com.duox.advancedutilities.system;
 
-import com.duox.advancedutilities.modules.Finder;
-import com.duox.advancedutilities.utils.RenderUtils;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.*;
-import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
+import com.duox.advancedutilities.modules.finder.Finder;
+import com.duox.advancedutilities.modules.finder.FinderSnapshot;
+import com.duox.advancedutilities.system.render.FinderRenderBackend;
+import com.duox.advancedutilities.system.render.GlFinderRenderBackend;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.bus.api.SubscribeEvent;
 
-/*
- * Handles rendering for modules that need world rendering.
- * Currently supports the Finder module for rendering found blocks and entities.
- */
 public class ModuleRenderer {
 
     private final ModuleManager moduleManager;
+    private final FinderRenderBackend finderBackend = new GlFinderRenderBackend();
 
     public ModuleRenderer(ModuleManager moduleManager) {
         this.moduleManager = moduleManager;
@@ -29,86 +20,14 @@ public class ModuleRenderer {
 
     @SubscribeEvent
     public void onRenderWorld(RenderLevelStageEvent event) {
-        // Render after translucent blocks
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
 
         Finder finder = moduleManager.getModule(Finder.class);
-        if (finder != null && finder.isEnabled()) {
-            renderFinder(event, finder);
+        if (finder == null || !finder.isEnabled()) return;
+
+        FinderSnapshot snapshot = finder.getSnapshot();
+        if (!snapshot.isEmpty()) {
+            finderBackend.render(event, snapshot);
         }
-    }
-
-    /**
-     * Renders the Finder module's found blocks and entities.
-     * Uses direct rendering (immediate mode) to have full control over RenderSystem.
-     * Ensures NO_DEPTH_TEST is always active for proper rendering.
-     */
-    private void renderFinder(RenderLevelStageEvent event, Finder finder) {
-        PoseStack poseStack = event.getPoseStack();
-        Vec3 cameraPos = event.getCamera().getPosition();
-
-        // 1. Chuẩn bị trạng thái RenderSystem (OpenGL)
-        // Lưu trạng thái cũ để không làm hỏng game
-        poseStack.pushPose();
-        poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableDepthTest(); // Disable depth test -> see through walls
-        RenderSystem.depthMask(false);   // Don't write to depth buffer -> don't occlude other objects
-        RenderSystem.disableCull();      // Render both sides of blocks
-
-        // Set shader directly
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-
-        // Get Tesselator (direct rendering tool)
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-
-        float rB = 1.0f, gB = 0.8f, bB = 0.2f, aB = Constants.RENDER_BLOCK_ALPHA; // Orange-yellow, transparent
-        var blocks = finder.getFoundBlocks(); // Get thread-safe snapshot
-
-        boolean hasBlocks = false;
-        for (BlockPos pos : blocks) {
-            RenderUtils.addFilledBoxToBuffer(poseStack, buffer, new AABB(pos), rB, gB, bB, aB);
-            hasBlocks = true;
-        }
-
-        if (hasBlocks) {
-            BufferUploader.drawWithShader(buffer.buildOrThrow());
-        }
-
-        // Phase 2: Render entities (lines)
-        RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
-        RenderSystem.lineWidth(Constants.RENDER_LINE_WIDTH);
-
-        buffer = tesselator.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
-
-        float rE = 1.0f, gE = 0.2f, bE = 0.2f, aE = Constants.RENDER_ENTITY_ALPHA; // Red
-        var entities = finder.getFoundEntities();
-
-        boolean hasEntities = false;
-        for (Entity entity : entities) {
-            double x = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.xo, entity.getX());
-            double y = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.yo, entity.getY());
-            double z = Mth.lerp(event.getPartialTick().getGameTimeDeltaPartialTick(true), entity.zo, entity.getZ());
-
-            AABB box = entity.getType().getDimensions().makeBoundingBox(new Vec3(x, y, z));
-            RenderUtils.addLineBoxToBuffer(poseStack, buffer, box, rE, gE, bE, aE);
-            hasEntities = true;
-        }
-
-        if (hasEntities) {
-            BufferUploader.drawWithShader(buffer.buildOrThrow());
-        }
-
-        // Restore state (cleanup)
-        RenderSystem.enableDepthTest();
-        RenderSystem.depthMask(true);
-        RenderSystem.enableCull();
-        RenderSystem.disableBlend();
-        RenderSystem.lineWidth(Constants.RENDER_DEFAULT_LINE_WIDTH);
-
-        poseStack.popPose();
     }
 }

@@ -1,6 +1,7 @@
 package com.duox.advancedutilities.system;
 
 import com.duox.advancedutilities.modules.*;
+import com.duox.advancedutilities.modules.finder.Finder;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
