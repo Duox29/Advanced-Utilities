@@ -32,6 +32,7 @@ public class ModuleManager {
         register(new KillAura());
         register(new AutoSprint());
         register(new AutoEat());
+        register(new AutoTool());
 
         // World category modules
         register(new VillagerRoller());

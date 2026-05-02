@@ -20,13 +20,7 @@ import java.util.List;
 public class KillAura extends Module {
 
     private final NumberSetting range = new NumberSetting("Range", 4.0, 1.0, 6.0, 0.1);
-    private final NumberSetting speed = new NumberSetting("Speed", 1.0, 0.0, 10.0, 0.1); // CPS? Or just a speed factor? Usually CPS or tick delay.
-                                                                                        // For now assuming 20 = 1 attack per tick, 10 = 1 attack per 2 ticks.
-                                                                                        // Wait, "Speed" usually means attack speed.
-                                                                                        // Let's interpret as CPS (Clicks Per Second). 20 max.
-
-    // Using tick delay logic: 20 ticks / CPS = ticks per attack.
-    // If Speed is 10, then 20/10 = 2 ticks delay.
+    private final NumberSetting speed = new NumberSetting("Speed", 1.0, 0.0, 10.0, 0.1);
 
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority", Priority.DISTANCE);
     private final NumberSetting degree = new NumberSetting("FOV", 360.0, 10.0, 360.0, 10.0); // Degree for FOV check
@@ -56,13 +50,11 @@ public class KillAura extends Module {
         if (mc.player == null || mc.level == null) return;
 
         if (speed.getValue() == 0) {
-            // Check attack cooldown (1.0f means fully charged)
             if (mc.player.getAttackStrengthScale(0.0f) < 1.0f) {
                 return;
             }
         } else {
-            // Calculate attack delay based on speed (CPS)
-            // Minecraft runs at 20 ticks per second.
+
             int delay = (int) (20.0 / speed.getValue());
             if (delay < 1) delay = 1;
 
@@ -109,10 +101,7 @@ public class KillAura extends Module {
         boolean isPlayer = entity instanceof Player;
 
         if (customFilter.contains(entity.getType())) {
-            // If it's in the custom filter list, and that list entry is true, then it's valid? 
-            // Usually custom filter acts as an whitelist or blacklist.
-            // Based on EntityListSetting implementation, it stores EntityType -> Boolean.
-            // So if it's in the map and true, we target it.
+
              if (customFilter.contains(entity.getType())) {
                  return true; // Whitelist behavior or Override
              }
