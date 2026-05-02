@@ -25,6 +25,7 @@ public class AutoFish extends Module {
     private final EnumSetting<FishMode> mode = new EnumSetting<>("Mode", FishMode.XP);
     private final NumberSetting recastDelay = new NumberSetting("Recast Delay", 20, 10, 100, 1);
     private final NumberSetting xpTimeout = new NumberSetting("XP Timeout", 60, 20, 200, 5);
+    private final NumberSetting maxWait = new NumberSetting("Max Wait Time", 600, 20, 1200, 20);
 
     // State variables
     private boolean isQueuedToRecast = false;
@@ -36,10 +37,11 @@ public class AutoFish extends Module {
     private int idleTicksCounter = 0;
 
     public AutoFish() {
-        super("AutoFish", "Auto fish with toggleable XP Mode.", Category.PLAYER);
+        super("AutoFish", "Auto catch fish.", Category.PLAYER);
         this.addSetting(mode);
         this.addSetting(recastDelay);
         this.addSetting(xpTimeout);
+        this.addSetting(maxWait);
     }
 
     @Override
@@ -89,7 +91,7 @@ public class AutoFish extends Module {
         var bobber = mc.player.fishing;
         if (bobber.tickCount < Constants.AUTOFISH_MIN_BOBBER_AGE) return;
 
-        if (bobber.tickCount >= Constants.AUTOFISH_MAX_WAIT_TICKS) {
+        if (bobber.tickCount >= maxWait.getValue()) {
             useRod();
             prepareRecast();
             return;
