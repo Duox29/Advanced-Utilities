@@ -47,7 +47,7 @@ public class ItemListWidget extends SettingWidget {
         this.onRefreshCallback = onRefresh;
         Minecraft mc = Minecraft.getInstance();
 
-        idInput = new EditBox(mc.font, x + 1, y + 20, width - 68, 18, Component.literal("minecraft:bread"));
+        idInput = new EditBox(mc.font, x + 1, y + 23, width - 68, 18, Component.literal("minecraft:bread"));
         idInput.setMaxLength(256);
         UiTheme.styleEditBox(idInput);
         widgetConsumer.accept(idInput);
@@ -69,7 +69,6 @@ public class ItemListWidget extends SettingWidget {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         guiGraphics.drawString(mc.font, setting.getName(), x, y + 4, UiTheme.TEXT_PRIMARY, false);
-        //guiGraphics.drawString(mc.font, "LMB toggle  •  RMB remove", x + width - 100, y + 4, UiTheme.TEXT_FAINT, false);
         UiTheme.drawInset(guiGraphics, x, y + 18, width, 20);
 
         int startX = x;
