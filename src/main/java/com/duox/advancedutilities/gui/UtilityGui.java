@@ -374,13 +374,26 @@ public class UtilityGui extends Screen {
         guiGraphics.drawString(this.font, selectedModule.getName(), paneX + INNER_PAD, paneY + 12, UiTheme.TEXT_PRIMARY, false);
         guiGraphics.drawString(this.font, selectedModule.getDescription(), paneX + INNER_PAD, paneY + 24, UiTheme.TEXT_MUTED, false);
 
+        boolean statusPillHovered = isInsideSelectedModulePill(mouseX, mouseY);
+
+        int statusBg;
+        int statusText;
+
+        if (selectedModule.isEnabled()) {
+            statusBg = UiTheme.withAlpha(UiTheme.SUCCESS, statusPillHovered ? 52 : 36);
+            statusText = UiTheme.SUCCESS;
+        } else {
+            statusBg = statusPillHovered ? UiTheme.PANEL_HOVER : UiTheme.PANEL_ALT;
+            statusText = statusPillHovered ? UiTheme.TEXT_PRIMARY : UiTheme.TEXT_MUTED;
+        }
+
         UiTheme.drawPill(guiGraphics,
-                paneX + contentW - 76,
-                paneY + 10,
-                56,
-                18,
-                selectedModule.isEnabled() ? UiTheme.withAlpha(UiTheme.SUCCESS, 36) : UiTheme.PANEL_ALT,
-                selectedModule.isEnabled() ? UiTheme.SUCCESS : UiTheme.TEXT_MUTED,
+                getSelectedModulePillX(),
+                getSelectedModulePillY(),
+                getSelectedModulePillWidth(),
+                getSelectedModulePillHeight(),
+                statusBg,
+                statusText,
                 this.font,
                 selectedModule.isEnabled() ? "ACTIVE" : "DISABLED");
 
@@ -412,7 +425,11 @@ public class UtilityGui extends Screen {
                 moduleSearchBox.setFocused(false);
             }
         }
-
+        if (button == 0 && isInsideSelectedModulePill(mouseX, mouseY)) {
+            selectedModule.toggle();
+            ConfigManager.getInstance().save();
+            return true;
+        }
         if (isInsideSettingsViewport(mouseX, mouseY)) {
             for (SettingWidget widget : customRenderWidgets) {
                 if (widget.mouseClicked(mouseX, mouseY + settingsScrollOffset, button)) {
@@ -573,5 +590,30 @@ public class UtilityGui extends Screen {
             return min;
         }
         return Math.min(value, max);
+    }
+    private int getSelectedModulePillX() {
+        return getSettingsPaneX() + contentW - 76;
+    }
+
+    private int getSelectedModulePillY() {
+        return getSettingsPaneY() + 10;
+    }
+
+    private int getSelectedModulePillWidth() {
+        return 56;
+    }
+
+    private int getSelectedModulePillHeight() {
+        return 18;
+    }
+
+    private boolean isInsideSelectedModulePill(double mouseX, double mouseY) {
+        return selectedModule != null && UiTheme.isInside(
+                mouseX, mouseY,
+                getSelectedModulePillX(),
+                getSelectedModulePillY(),
+                getSelectedModulePillWidth(),
+                getSelectedModulePillHeight()
+        );
     }
 }
