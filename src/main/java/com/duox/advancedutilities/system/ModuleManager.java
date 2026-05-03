@@ -40,6 +40,8 @@ public class ModuleManager {
 
         // Misc category modules
         register(new AutoReconnect());
+        register(new AutoRefill());
+        register(new TrashFilter());
 
         // Render category modules
         register(new FullBright());
@@ -113,10 +115,7 @@ public class ModuleManager {
                     boolean isKeyDown = module.getKeyMapping().isDown();
                     if (module.isEnabled() != isKeyDown) {
                          module.setEnabled(isKeyDown);
-                         // Optional: Don't notify for hold modules to avoid spam
-                         // toggledModules.add(module);
                     }
-                    // Consume click to prevent it from accumulating
                     while (module.getKeyMapping().consumeClick()) {}
                 } else {
                     while (module.getKeyMapping().consumeClick()) {
