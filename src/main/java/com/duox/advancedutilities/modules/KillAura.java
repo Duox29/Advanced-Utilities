@@ -23,11 +23,12 @@ public class KillAura extends Module {
     private final NumberSetting speed = new NumberSetting("Speed", 1.0, 0.0, 10.0, 0.1);
 
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority", Priority.DISTANCE);
-    private final NumberSetting degree = new NumberSetting("FOV", 360.0, 10.0, 360.0, 10.0); // Degree for FOV check
-    
+    private final NumberSetting degree = new NumberSetting("FOV", 360.0, 10.0, 360.0, 10.0);
+
     private final BooleanSetting hostile = new BooleanSetting("Hostile", true);
     private final BooleanSetting passive = new BooleanSetting("Passive", false);
     private final BooleanSetting players = new BooleanSetting("Players", true);
+    private final BooleanSetting allLivingExceptPlayer = new BooleanSetting("All Living (Except Player)", false); // OPTION MỚI
 
     private final EntityListSetting customFilter = new EntityListSetting("Custom Filter");
 
@@ -42,6 +43,7 @@ public class KillAura extends Module {
         addSetting(hostile);
         addSetting(passive);
         addSetting(players);
+        addSetting(allLivingExceptPlayer); // THÊM SETTING
         addSetting(customFilter);
     }
 
@@ -54,7 +56,6 @@ public class KillAura extends Module {
                 return;
             }
         } else {
-
             int delay = (int) (20.0 / speed.getValue());
             if (delay < 1) delay = 1;
 
@@ -68,15 +69,13 @@ public class KillAura extends Module {
         double rangeVal = range.getValue();
         double fovVal = degree.getValue();
 
-        List<Entity> targets = mc.level.getEntitiesOfClass(Entity.class, 
-                mc.player.getBoundingBox().inflate(rangeVal), 
+        List<Entity> targets = mc.level.getEntitiesOfClass(Entity.class,
+                mc.player.getBoundingBox().inflate(rangeVal),
                 entity -> isValidTarget(entity, rangeVal, fovVal));
 
         if (targets.isEmpty()) return;
 
-        // Sort by priority
         targets.sort(getComparator());
-
         Entity target = targets.get(0);
         attack(target);
     }
@@ -95,19 +94,21 @@ public class KillAura extends Module {
             if (angle > fovVal / 2.0) return false;
         }
 
-        // Check types
-        boolean isHostile = entity instanceof Monster; // Simple check, might need refinement
-        boolean isPassive = entity instanceof Animal; // Simple check
+        // === OPTION MỚI: TẤN CÔNG MỌI SINH VẬT NGOẠI TRỪ NGƯỜI CHƠI ===
+        if (allLivingExceptPlayer.getValue() && !(entity instanceof Player)) {
+            return true;
+        }
+
+        // Custom filter (whitelist)
+        if (customFilter.contains(entity.getType())) {
+            return true;
+        }
+
+        // Standard filters
+        boolean isHostile = entity instanceof Monster;
+        boolean isPassive = entity instanceof Animal;
         boolean isPlayer = entity instanceof Player;
 
-        if (customFilter.contains(entity.getType())) {
-
-             if (customFilter.contains(entity.getType())) {
-                 return true; // Whitelist behavior or Override
-             }
-        }
-        
-        // If not in custom filter (or custom filter logic implies valid), check standard filters
         if (isPlayer && players.getValue()) return true;
         if (isHostile && hostile.getValue()) return true;
         return isPassive && passive.getValue();
@@ -127,7 +128,7 @@ public class KillAura extends Module {
             default -> Comparator.comparingDouble(e -> mc.player.distanceTo(e));
         };
     }
-    
+
     private double getAngleDifference(Entity entity) {
         Vec3 lookVec = mc.player.getLookAngle();
         Vec3 toEntityVec = entity.position().subtract(mc.player.position()).normalize();

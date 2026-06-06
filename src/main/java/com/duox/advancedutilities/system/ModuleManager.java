@@ -24,6 +24,7 @@ public class ModuleManager {
     private final Map<Class<? extends Module>, Module> moduleMap = new LinkedHashMap<>();
 
     private ModuleManager() {
+        
         // Player category modules
         register(new AutoFish());
         register(new AutoRightClick());
@@ -47,6 +48,7 @@ public class ModuleManager {
         register(new FullBright());
         register(new Zoom());
         register(new Finder());
+        register(new TrueSight());
     }
 
     /**
