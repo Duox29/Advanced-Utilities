@@ -1,19 +1,33 @@
 package com.duox.advancedutilities.modules.finder;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public record FinderSnapshot(
-        List<AABB> blockBoxes,
-        List<EntityRenderTarget> entityTargets
+        long[] blockPositions,
+        List<FinderSnapshot.EntityRenderTarget> entityTargets,
+        int version
 ) {
-    public static final FinderSnapshot EMPTY = new FinderSnapshot(List.of(), List.of());
+    public static final FinderSnapshot EMPTY = new FinderSnapshot(new long[0], List.of(), 0);
 
     public boolean isEmpty() {
-        return blockBoxes.isEmpty() && entityTargets.isEmpty();
+        return blockPositions.length == 0 && entityTargets.isEmpty();
+    }
+
+    public List<AABB> getBlockBoxes() {
+        ArrayList<AABB> boxes = new ArrayList<>(blockPositions.length);
+        for (long packed : blockPositions) {
+            boxes.add(new AABB(
+                    BlockPos.getX(packed), BlockPos.getY(packed), BlockPos.getZ(packed),
+                    BlockPos.getX(packed) + 1, BlockPos.getY(packed) + 1, BlockPos.getZ(packed) + 1
+            ));
+        }
+        return boxes;
     }
 
     public record EntityRenderTarget(

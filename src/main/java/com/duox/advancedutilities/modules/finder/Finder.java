@@ -8,15 +8,7 @@ import com.duox.advancedutilities.system.settings.BooleanSetting;
 import com.duox.advancedutilities.system.settings.EntityListSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.phys.AABB;
-
-import java.util.*;
 
 public class Finder extends Module {
 
@@ -42,16 +34,15 @@ public class Finder extends Module {
     private final BlockListSetting blockList = new BlockListSetting("Blocks");
     private final EntityListSetting entityList = new EntityListSetting("Entities");
 
-    private final ArrayDeque<ChunkPos> pendingChunks = new ArrayDeque<>();
-    private final HashSet<Long> foundBlockKeys = new HashSet<>();
-    private final ArrayList<AABB> blockBoxes = new ArrayList<>();
+    private final BlockScanner blockScanner = new BlockScanner();
+    private final EntityScanner entityScanner = new EntityScanner();
 
-    private List<FinderSnapshot.EntityRenderTarget> entityTargets = List.of();
     private volatile FinderSnapshot snapshot = FinderSnapshot.EMPTY;
+    private boolean snapshotDirty = true;
+    private int snapshotVersion = 0;
 
-    private BlockPos scanOrigin;
-    private Set<Block> cachedTargetBlocks = Set.of();
-    private int entityTickCounter = 0;
+    private BlockPos lastTickPos = BlockPos.ZERO;
+    private float adaptiveMultiplier = 1.0f;
 
     public Finder() {
         super("Finder", "Searches for specific blocks and entities globally.", Category.RENDER);
@@ -67,198 +58,99 @@ public class Finder extends Module {
 
     @Override
     public void onEnable() {
-        resetAll();
-        entityTickCounter = Constants.FINDER_SCAN_INTERVAL_TICKS;
+        blockScanner.clear();
+        entityScanner.clear();
+        snapshot = FinderSnapshot.EMPTY;
+        snapshotDirty = true;
+        adaptiveMultiplier = 1.0f;
     }
 
     @Override
     public void onDisable() {
-        resetAll();
-        snapshot = FinderSnapshot.EMPTY;
+        blockScanner.clear();
+        entityScanner.clear();
+        clearSnapshot();
     }
 
     @Override
     public void onTick() {
         if (mc.player == null || mc.level == null) {
-            snapshot = FinderSnapshot.EMPTY;
+            if (!snapshot.isEmpty()) clearSnapshot();
             return;
         }
 
+        BlockPos playerPos = mc.player.blockPosition();
+        updateAdaptiveThrottle(playerPos);
+        lastTickPos = playerPos;
+
         if (searchBlocks.getValue()) {
-            restartBlockScanIfNeeded();
-            scanNextChunkBatch();
+            if (blockScanner.needsRestart(playerPos, movementThreshold.getInt())) {
+                blockScanner.adjustOrigin(playerPos, range.getInt(), blockList.getBlocks(), mc.player.chunkPosition());
+                snapshotDirty = true;
+            }
+            int effectiveChunks = Math.round(chunksPerScan.getInt() * adaptiveMultiplier);
+            blockScanner.scanNextBatch(mc.level, playerPos, Math.max(1, effectiveChunks), limit.getInt(), range.getInt());
+            if (blockScanner.isDirty()) {
+                snapshotDirty = true;
+                blockScanner.clearDirty();
+            }
         } else {
-            clearBlockResults();
+            if (blockScanner.isScanning() || blockScanner.getSize() > 0) {
+                blockScanner.clear();
+                snapshotDirty = true;
+            }
         }
 
-        if (entityTickCounter++ >= Constants.FINDER_SCAN_INTERVAL_TICKS) {
+        entityScanner.tick();
+        if (entityScanner.isReady(Constants.FINDER_SCAN_INTERVAL_TICKS)) {
             if (searchEntities.getValue()) {
-                rescanEntities();
+                entityScanner.rescan(mc.level, mc.player, entityList, range.getValue(), limit.getInt());
             } else {
-                entityTargets = List.of();
-                publishSnapshot();
+                entityScanner.clearResults();
             }
-            entityTickCounter = 0;
+            if (entityScanner.isDirty()) {
+                snapshotDirty = true;
+                entityScanner.clearDirty();
+            }
+        }
+
+        if (snapshotDirty) publishSnapshot();
+    }
+
+    private void updateAdaptiveThrottle(BlockPos currentPos) {
+        double dist = Math.sqrt(lastTickPos.distSqr(currentPos));
+        if (dist > 0.3) {
+            adaptiveMultiplier = Math.max(0.25f, adaptiveMultiplier * 0.95f);
+        } else if (dist < 0.1) {
+            adaptiveMultiplier = Math.min(1.0f, adaptiveMultiplier * 1.05f);
+        }
+    }
+
+    private void publishSnapshot() {
+        snapshotVersion++;
+        snapshot = new FinderSnapshot(
+                blockScanner.getBlockPositions(),
+                entityScanner.getTargets(),
+                snapshotVersion
+        );
+        snapshotDirty = false;
+    }
+
+    private void clearSnapshot() {
+        snapshot = FinderSnapshot.EMPTY;
+        snapshotDirty = false;
+    }
+
+    public void onChunkLoad(ChunkPos pos) {
+        if (!isEnabled() || !searchBlocks.getValue() || mc.player == null) return;
+        BlockPos chunkCenter = new BlockPos(pos.getMinBlockX() + 8, 64, pos.getMinBlockZ() + 8);
+        if (mc.player.blockPosition().distSqr(chunkCenter) <= (double) range.getInt() * range.getInt()) {
+            blockScanner.addChunk(pos);
+            snapshotDirty = true;
         }
     }
 
     public FinderSnapshot getSnapshot() {
         return snapshot;
-    }
-
-    private void resetAll() {
-        pendingChunks.clear();
-        foundBlockKeys.clear();
-        blockBoxes.clear();
-        entityTargets = List.of();
-        scanOrigin = null;
-        cachedTargetBlocks = Set.of();
-    }
-
-    private void clearBlockResults() {
-        if (!blockBoxes.isEmpty() || !pendingChunks.isEmpty()) {
-            pendingChunks.clear();
-            foundBlockKeys.clear();
-            blockBoxes.clear();
-            scanOrigin = null;
-            publishSnapshot();
-        }
-    }
-
-    private void restartBlockScanIfNeeded() {
-        BlockPos playerPos = mc.player.blockPosition();
-
-        boolean restart = false;
-        if (scanOrigin == null) {
-            restart = true;
-        } else {
-            int threshold = movementThreshold.getInt();
-            restart = scanOrigin.distSqr(playerPos) > (double) threshold * threshold;
-        }
-
-        if (!restart) return;
-
-        pendingChunks.clear();
-        foundBlockKeys.clear();
-        blockBoxes.clear();
-
-        cachedTargetBlocks = Set.copyOf(blockList.getBlocks());
-        scanOrigin = playerPos.immutable();
-
-        if (cachedTargetBlocks.isEmpty()) {
-            publishSnapshot();
-            return;
-        }
-
-        int radiusChunks = Math.max(0, range.getInt() / 16);
-        enqueueChunksSpiral(mc.player.chunkPosition(), radiusChunks);
-        publishSnapshot();
-    }
-
-    private void enqueueChunksSpiral(ChunkPos center, int radius) {
-        pendingChunks.add(new ChunkPos(center.x, center.z));
-
-        for (int ring = 1; ring <= radius; ring++) {
-            int minX = center.x - ring;
-            int maxX = center.x + ring;
-            int minZ = center.z - ring;
-            int maxZ = center.z + ring;
-
-            for (int x = minX; x <= maxX; x++) pendingChunks.add(new ChunkPos(x, minZ));
-            for (int z = minZ + 1; z <= maxZ; z++) pendingChunks.add(new ChunkPos(maxX, z));
-            for (int x = maxX - 1; x >= minX; x--) pendingChunks.add(new ChunkPos(x, maxZ));
-            for (int z = maxZ - 1; z > minZ; z--) pendingChunks.add(new ChunkPos(minX, z));
-        }
-    }
-
-    private void scanNextChunkBatch() {
-        if (mc.player == null || mc.level == null) return;
-        if (pendingChunks.isEmpty()) return;
-        if (cachedTargetBlocks.isEmpty()) return;
-        if (blockBoxes.size() >= limit.getInt()) return;
-
-        int processed = 0;
-        int maxChunks = chunksPerScan.getInt();
-        int maxResults = limit.getInt();
-        long rangeSq = (long) range.getInt() * range.getInt();
-        BlockPos playerPos = mc.player.blockPosition();
-
-        while (processed < maxChunks && !pendingChunks.isEmpty() && blockBoxes.size() < maxResults) {
-            ChunkPos chunkPos = pendingChunks.pollFirst();
-            processed++;
-
-            if (!mc.level.hasChunk(chunkPos.x, chunkPos.z)) continue;
-
-            LevelChunk chunk = mc.level.getChunk(chunkPos.x, chunkPos.z);
-            scanChunk(chunk, playerPos, rangeSq, maxResults);
-        }
-
-        publishSnapshot();
-    }
-
-    private void scanChunk(LevelChunk chunk, BlockPos playerPos, long rangeSq, int maxResults) {
-        LevelChunkSection[] sections = chunk.getSections();
-
-        for (int i = 0; i < sections.length; i++) {
-            LevelChunkSection section = sections[i];
-            if (section == null || section.hasOnlyAir()) continue;
-
-            int baseY = chunk.getSectionYFromSectionIndex(i) * 16;
-
-            for (int x = 0; x < 16; x++) {
-                for (int y = 0; y < 16; y++) {
-                    for (int z = 0; z < 16; z++) {
-                        if (blockBoxes.size() >= maxResults) return;
-
-                        BlockState state = section.getBlockState(x, y, z);
-                        if (!cachedTargetBlocks.contains(state.getBlock())) continue;
-
-                        int worldX = chunk.getPos().getMinBlockX() + x;
-                        int worldY = baseY + y;
-                        int worldZ = chunk.getPos().getMinBlockZ() + z;
-
-                        double distSq = playerPos.distToCenterSqr(
-                                worldX + 0.5D,
-                                worldY + 0.5D,
-                                worldZ + 0.5D
-                        );                        if (distSq > rangeSq) continue;
-
-                        long key = BlockPos.asLong(worldX, worldY, worldZ);
-                        if (!foundBlockKeys.add(key)) continue;
-
-                        blockBoxes.add(new AABB(worldX, worldY, worldZ, worldX + 1, worldY + 1, worldZ + 1));
-                    }
-                }
-            }
-        }
-    }
-
-    private void rescanEntities() {
-        if (mc.player == null || mc.level == null) return;
-
-        double r = range.getValue();
-        int max = limit.getInt();
-
-        AABB area = mc.player.getBoundingBox().inflate(r);
-        List<Entity> all = mc.level.getEntities(mc.player, area);
-
-        all.removeIf(entity -> !entityList.contains(entity.getType()));
-        all.sort(Comparator.comparingDouble(entity -> entity.distanceToSqr(mc.player)));
-
-        ArrayList<FinderSnapshot.EntityRenderTarget> results = new ArrayList<>(Math.min(max, all.size()));
-        for (Entity entity : all) {
-            if (results.size() >= max) break;
-            results.add(FinderSnapshot.EntityRenderTarget.from(entity));
-        }
-
-        entityTargets = List.copyOf(results);
-        publishSnapshot();
-    }
-
-    private void publishSnapshot() {
-        snapshot = new FinderSnapshot(
-                List.copyOf(blockBoxes),
-                List.copyOf(entityTargets)
-        );
     }
 }
