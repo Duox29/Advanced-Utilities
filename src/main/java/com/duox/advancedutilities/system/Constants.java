@@ -22,6 +22,12 @@ public final class Constants {
     public static final int FINDER_MIN_LIMIT = 10;
     public static final int FINDER_MAX_LIMIT = 5000;
 
+    // Finder scanner worker tuning
+    /** Sections re-scanned per idle pass so block edits show up without event hooks. */
+    public static final int FINDER_REFRESH_SECTIONS_PER_PASS = 48;
+    /** Minimum spacing between refresh passes (250 ms). */
+    public static final long FINDER_REFRESH_MIN_INTERVAL_NANOS = 250_000_000L;
+
     // AutoFish module constants
     public static final int AUTOFISH_WATCHDOG_TIMEOUT_TICKS = 400; // 20 seconds
     public static final int AUTOFISH_MAX_WAIT_TICKS = 600; // 30 seconds
@@ -53,4 +59,3 @@ public final class Constants {
     public static final float RENDER_BLOCK_ALPHA = 0.4f;
     public static final float RENDER_ENTITY_ALPHA = 1.0f;
 }
-

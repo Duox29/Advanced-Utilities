@@ -7,29 +7,32 @@ import com.duox.advancedutilities.system.settings.BlockListSetting;
 import com.duox.advancedutilities.system.settings.BooleanSetting;
 import com.duox.advancedutilities.system.settings.EntityListSetting;
 import com.duox.advancedutilities.system.settings.NumberSetting;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
 
+import java.util.List;
+
+/**
+ * Searches for configured blocks and entities within range and publishes immutable
+ * snapshots consumed by {@code GlFinderRenderBackend}.
+ *
+ * Threading model: all heavy work happens on the ScannerWorker thread; this module's
+ * onTick only posts cheap commands and swaps in published results when they actually
+ * changed. No per-tick allocations on the happy path.
+ */
 public class Finder extends Module {
 
     private final BooleanSetting searchBlocks = new BooleanSetting("Search Blocks", true);
     private final BooleanSetting searchEntities = new BooleanSetting("Search Entities", true);
     private final NumberSetting range = new NumberSetting(
-            "Range",
-            Constants.FINDER_DEFAULT_RANGE,
-            Constants.FINDER_MIN_RANGE,
-            Constants.FINDER_MAX_RANGE,
-            16
-    );
+            "Range", Constants.FINDER_DEFAULT_RANGE,
+            Constants.FINDER_MIN_RANGE, Constants.FINDER_MAX_RANGE, 16);
     private final NumberSetting limit = new NumberSetting(
-            "Max Results",
-            Constants.FINDER_DEFAULT_LIMIT,
-            Constants.FINDER_MIN_LIMIT,
-            Constants.FINDER_MAX_LIMIT,
-            10
-    );
+            "Max Results", Constants.FINDER_DEFAULT_LIMIT,
+            Constants.FINDER_MIN_LIMIT, Constants.FINDER_MAX_LIMIT, 10);
     private final NumberSetting chunksPerScan = new NumberSetting("Chunks Per Scan", 4, 1, 32, 1);
-    private final NumberSetting movementThreshold = new NumberSetting("Movement Threshold", 8, 0, 64, 1);
 
     private final BlockListSetting blockList = new BlockListSetting("Blocks");
     private final EntityListSetting entityList = new EntityListSetting("Entities");
@@ -37,12 +40,19 @@ public class Finder extends Module {
     private final BlockScanner blockScanner = new BlockScanner();
     private final EntityScanner entityScanner = new EntityScanner();
 
+    /** volatile: written on the client thread, read on the render thread. */
     private volatile FinderSnapshot snapshot = FinderSnapshot.EMPTY;
-    private boolean snapshotDirty = true;
-    private int snapshotVersion = 0;
+    private long consumedSeq = 0;
+    private int version = 0;
+    private long[] currentBlocks = FinderSnapshot.EMPTY.blockPositions();
 
-    private BlockPos lastTickPos = BlockPos.ZERO;
-    private float adaptiveMultiplier = 1.0f;
+    // Config signature: reconfigure the worker only when something actually changed.
+    private ClientLevel trackedLevel;
+    private boolean trackedSearchBlocks;
+    private List<Block> lastTargets = List.of();
+    private int lastRange = -1;
+    private int lastLimit = -1;
+    private int lastChunksPerScan = -1;
 
     public Finder() {
         super("Finder", "Searches for specific blocks and entities globally.", Category.RENDER);
@@ -53,101 +63,123 @@ public class Finder extends Module {
         addSetting(range);
         addSetting(limit);
         addSetting(chunksPerScan);
-        addSetting(movementThreshold);
     }
 
     @Override
     public void onEnable() {
-        blockScanner.clear();
-        entityScanner.clear();
+        // Force a fresh configure on the next tick.
+        trackedLevel = null;
+        lastTargets = List.of();
+        lastRange = -1;
+        lastLimit = -1;
+        currentBlocks = FinderSnapshot.EMPTY.blockPositions();
+        consumedSeq = 0;
         snapshot = FinderSnapshot.EMPTY;
-        snapshotDirty = true;
-        adaptiveMultiplier = 1.0f;
     }
 
     @Override
     public void onDisable() {
         blockScanner.clear();
         entityScanner.clear();
-        clearSnapshot();
+        snapshot = FinderSnapshot.EMPTY;
+        currentBlocks = FinderSnapshot.EMPTY.blockPositions();
     }
 
     @Override
     public void onTick() {
-        if (mc.player == null || mc.level == null) {
-            if (!snapshot.isEmpty()) clearSnapshot();
+        ClientLevel level = mc.level;
+        if (mc.player == null || level == null) {
+            if (!snapshot.isEmpty()) {
+                snapshot = FinderSnapshot.EMPTY;
+                currentBlocks = FinderSnapshot.EMPTY.blockPositions();
+            }
+            blockScanner.clear();
+            trackedLevel = null;
             return;
         }
 
         BlockPos playerPos = mc.player.blockPosition();
-        updateAdaptiveThrottle(playerPos);
-        lastTickPos = playerPos;
+        ChunkPos playerChunk = mc.player.chunkPosition();
+        boolean dirty = false;
 
-        if (searchBlocks.getValue()) {
-            if (blockScanner.needsRestart(playerPos, movementThreshold.getInt())) {
-                blockScanner.adjustOrigin(playerPos, range.getInt(), blockList.getBlocks(), mc.player.chunkPosition());
-                snapshotDirty = true;
+        // ---- blocks: keep worker config in sync with settings/world ----
+        boolean wantBlocks = searchBlocks.getValue();
+        syncBlockConfig(level, playerPos, playerChunk, wantBlocks);
+
+        if (wantBlocks) {
+            blockScanner.updateCenter(playerPos, playerChunk); // no-op unless chunk changed
+            BlockScanner.Publication pub = blockScanner.poll(consumedSeq);
+            if (pub != null) {
+                consumedSeq = pub.seq();
+                currentBlocks = pub.positions();
+                dirty = true;
             }
-            int effectiveChunks = Math.round(chunksPerScan.getInt() * adaptiveMultiplier);
-            blockScanner.scanNextBatch(mc.level, playerPos, Math.max(1, effectiveChunks), limit.getInt(), range.getInt());
-            if (blockScanner.isDirty()) {
-                snapshotDirty = true;
-                blockScanner.clearDirty();
-            }
-        } else {
-            if (blockScanner.isScanning() || blockScanner.getSize() > 0) {
-                blockScanner.clear();
-                snapshotDirty = true;
-            }
+        } else if (trackedSearchBlocks) { // just toggled off -> drop results once
+            blockScanner.clear();
+            currentBlocks = FinderSnapshot.EMPTY.blockPositions();
+            dirty = true;
         }
+        trackedSearchBlocks = wantBlocks;
 
+        // ---- entities ----
         entityScanner.tick();
         if (entityScanner.isReady(Constants.FINDER_SCAN_INTERVAL_TICKS)) {
             if (searchEntities.getValue()) {
-                entityScanner.rescan(mc.level, mc.player, entityList, range.getValue(), limit.getInt());
+                dirty |= entityScanner.rescan(level, mc.player, entityList,
+                        range.getValue(), limit.getInt());
             } else {
-                entityScanner.clearResults();
-            }
-            if (entityScanner.isDirty()) {
-                snapshotDirty = true;
-                entityScanner.clearDirty();
+                dirty |= entityScanner.clearResults();
             }
         }
 
-        if (snapshotDirty) publishSnapshot();
+        if (dirty) publish();
     }
 
-    private void updateAdaptiveThrottle(BlockPos currentPos) {
-        double dist = Math.sqrt(lastTickPos.distSqr(currentPos));
-        if (dist > 0.3) {
-            adaptiveMultiplier = Math.max(0.25f, adaptiveMultiplier * 0.95f);
-        } else if (dist < 0.1) {
-            adaptiveMultiplier = Math.min(1.0f, adaptiveMultiplier * 1.05f);
+    private void syncBlockConfig(ClientLevel level, BlockPos playerPos, ChunkPos playerChunk,
+                                 boolean wantBlocks) {
+        int rangeVal = range.getInt();
+        int limitVal = limit.getInt();
+        int batchVal = chunksPerScan.getInt();
+
+        if (batchVal != lastChunksPerScan) {
+            lastChunksPerScan = batchVal;
+            blockScanner.setBatchChunks(batchVal);
+        }
+
+        if (!wantBlocks) return; // worker stays idle; results cleared by toggle handling
+
+        // getBlocksView() is cached inside the setting; equals() is identity-cheap.
+        List<Block> targets = blockList.getBlocksView();
+        boolean targetsChanged = !targets.equals(lastTargets);
+
+        // Limit changes reconfigure too: rare, and guarantees consistent saturation
+        // behavior without a separate soft-update path.
+        if (level != trackedLevel || targetsChanged || rangeVal != lastRange || limitVal != lastLimit) {
+            trackedLevel = level;
+            lastTargets = List.copyOf(targets);
+            lastRange = rangeVal;
+            lastLimit = limitVal;
+            currentBlocks = FinderSnapshot.EMPTY.blockPositions();
+            consumedSeq = 0;
+            blockScanner.configure(level, targets, rangeVal, limitVal, playerPos,
+                    level.getSectionsCount());
         }
     }
 
-    private void publishSnapshot() {
-        snapshotVersion++;
-        snapshot = new FinderSnapshot(
-                blockScanner.getBlockPositions(),
-                entityScanner.getTargets(),
-                snapshotVersion
-        );
-        snapshotDirty = false;
+    private void publish() {
+        snapshot = new FinderSnapshot(currentBlocks, entityScanner.getTargets(), ++version);
     }
 
-    private void clearSnapshot() {
-        snapshot = FinderSnapshot.EMPTY;
-        snapshotDirty = false;
-    }
-
+    /** Called from the render thread via ModuleRenderer when a chunk loads. */
     public void onChunkLoad(ChunkPos pos) {
-        if (!isEnabled() || !searchBlocks.getValue() || mc.player == null) return;
-        BlockPos chunkCenter = new BlockPos(pos.getMinBlockX() + 8, 64, pos.getMinBlockZ() + 8);
-        if (mc.player.blockPosition().distSqr(chunkCenter) <= (double) range.getInt() * range.getInt()) {
-            blockScanner.addChunk(pos);
-            snapshotDirty = true;
-        }
+        if (!isEnabled() || !searchBlocks.getValue()) return;
+        blockScanner.addChunk(pos);
+    }
+
+    /** Called from the render thread via ModuleRenderer when a chunk unloads.
+     *  Prevents stale highlights after leaving an area or changing dimension. */
+    public void onChunkUnload(ChunkPos pos) {
+        blockScanner.removeChunk(pos);
     }
 
     public FinderSnapshot getSnapshot() {

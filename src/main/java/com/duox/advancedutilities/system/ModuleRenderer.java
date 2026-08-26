@@ -35,11 +35,23 @@ public class ModuleRenderer {
 
     @SubscribeEvent
     public void onChunkLoad(ChunkEvent.Load event) {
-        if (!(event.getLevel() instanceof ClientLevel)) return;
-
-        Finder finder = moduleManager.getModule(Finder.class);
-        if (finder != null && finder.isEnabled()) {
+        Finder finder = forwardTarget(event);
+        if (finder != null) {
             finder.onChunkLoad(event.getChunk().getPos());
         }
+    }
+
+    @SubscribeEvent
+    public void onChunkUnload(ChunkEvent.Unload event) {
+        Finder finder = forwardTarget(event);
+        if (finder != null) {
+            finder.onChunkUnload(event.getChunk().getPos());
+        }
+    }
+
+    private Finder forwardTarget(ChunkEvent event) {
+        if (!(event.getLevel() instanceof ClientLevel)) return null;
+        Finder finder = moduleManager.getModule(Finder.class);
+        return finder == null || !finder.isEnabled() ? null : finder;
     }
 }

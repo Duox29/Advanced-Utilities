@@ -1,16 +1,21 @@
 package com.duox.advancedutilities.modules.finder;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 
-import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Immutable view of everything the Finder currently renders.
+ *
+ * blockPositions is the exact array instance published by the scanner worker and is
+ * never mutated afterwards; the renderer exploits that reference-stability as its
+ * mesh cache key (rebuild only when the instance identity changes).
+ */
 public record FinderSnapshot(
         long[] blockPositions,
-        List<FinderSnapshot.EntityRenderTarget> entityTargets,
+        List<EntityTarget> entityTargets,
         int version
 ) {
     public static final FinderSnapshot EMPTY = new FinderSnapshot(new long[0], List.of(), 0);
@@ -19,40 +24,32 @@ public record FinderSnapshot(
         return blockPositions.length == 0 && entityTargets.isEmpty();
     }
 
-    public List<AABB> getBlockBoxes() {
-        ArrayList<AABB> boxes = new ArrayList<>(blockPositions.length);
-        for (long packed : blockPositions) {
-            boxes.add(new AABB(
-                    BlockPos.getX(packed), BlockPos.getY(packed), BlockPos.getZ(packed),
-                    BlockPos.getX(packed) + 1, BlockPos.getY(packed) + 1, BlockPos.getZ(packed) + 1
-            ));
-        }
-        return boxes;
-    }
+    /** Live entity reference wrapper: lerps against the entity's actual current position
+     *  at render time instead of stale scan-time coordinates, so boxes track entities
+     *  smoothly between rescans and disappear the moment the entity is removed. */
+    public static final class EntityTarget {
+        private final Entity entity;
+        private final float halfWidth;
+        private final float height;
 
-    public record EntityRenderTarget(
-            double prevX, double prevY, double prevZ,
-            double x, double y, double z,
-            float width, float height
-    ) {
-        public static EntityRenderTarget from(Entity entity) {
-            return new EntityRenderTarget(
-                    entity.xo, entity.yo, entity.zo,
-                    entity.getX(), entity.getY(), entity.getZ(),
-                    entity.getBbWidth(), entity.getBbHeight()
-            );
+        public EntityTarget(Entity entity) {
+            this.entity = entity;
+            this.halfWidth = entity.getBbWidth() * 0.5F;
+            this.height = entity.getBbHeight();
         }
 
+        public Entity entity() {
+            return entity;
+        }
+
+        /** @return the interpolated box, or null if the entity is gone and should no
+         *          longer be rendered. */
         public AABB lerpedBox(float partialTick) {
-            double lx = Mth.lerp(partialTick, prevX, x);
-            double ly = Mth.lerp(partialTick, prevY, y);
-            double lz = Mth.lerp(partialTick, prevZ, z);
-
-            double hw = width * 0.5D;
-            return new AABB(
-                    lx - hw, ly, lz - hw,
-                    lx + hw, ly + height, lz + hw
-            );
+            if (entity.isRemoved()) return null;
+            double x = Mth.lerp(partialTick, entity.xo, entity.getX());
+            double y = Mth.lerp(partialTick, entity.yo, entity.getY());
+            double z = Mth.lerp(partialTick, entity.zo, entity.getZ());
+            return new AABB(x - halfWidth, y, z - halfWidth, x + halfWidth, y + height, z + halfWidth);
         }
     }
 }
